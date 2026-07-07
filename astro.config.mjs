@@ -6,7 +6,7 @@ import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
   // site is finalized at deploy time (GitHub Pages URL)
-  site: 'https://example.github.io',
+  site: 'https://beren-sds.github.io',
   base: '/all-about-dllms',
   integrations: [svelte(), mdx()],
   markdown: {
