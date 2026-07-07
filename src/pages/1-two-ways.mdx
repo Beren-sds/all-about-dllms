@@ -8,6 +8,7 @@ description: Autoregression and diffusion differ in exactly two choices, the cor
 import Callout from '../components/Callout.astro';
 import Ref from '../components/Ref.astro';
 import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
 import DecodingPlayground from '../components/widgets/DecodingPlayground.svelte';
 
 # Two Ways to Write a Sentence
@@ -17,83 +18,167 @@ answers any other: *in what order, and conditioned on what context, are tokens
 decided?* For a decade the field gave a single answer, left to right, each
 token conditioned on the tokens already written. That answer is
 **autoregression** (AR), and it underwrites GPT, Llama, and essentially every
-deployed language model.
+deployed language model. It is so dominant that its central assumption is easy
+to mistake for a law of nature rather than a modelling choice.
 
 This site is about the other answer. **Diffusion language models** (dLLMs)
 generate a sequence by starting from a fully corrupted draft, a row of mask
 placeholders, and iteratively denoising it into clean text, revising many
 positions in parallel and in no fixed order. Below is a real one doing exactly
-that. It is a small model trained for this tutorial, and every frame is an
-actual decode, not an animation:
+that: a small model trained for this tutorial, every frame an actual decode
+rather than an animation. Watch which positions it fills first, and notice
+that they are nowhere near left-to-right:
 
 <DecodingPlayground client:visible autoplay={true} compact={true} />
 
-<Callout kind="keyidea">
-The organizing idea of everything that follows: **generative sequence
-modelling is repeatedly predicting clean tokens from a corrupted context.**
-Autoregression and diffusion are two points in one design space. They differ
-only in (i) the **corruption process** that defines what "a partially observed
-sequence" means, and (ii) the **decoding order** in which positions are
-committed. AR corrupts by truncation (everything after position $i$ is hidden)
-and decodes strictly left to right. Diffusion corrupts by masking (a random
-subset of positions is hidden) and decodes in any order, many positions per
-step.
-</Callout>
+## The champion, taken seriously
 
-## Why look past autoregression at all?
-
-Autoregression is not broken. But the left-to-right factorization
+To understand what diffusion changes, first be precise about what it
+challenges. Autoregression factorizes the joint distribution by the chain
+rule in one fixed order:
 
 $$
-p(\mathbf{x}) = \prod_{i=1}^{L} p\left(x_i \mid x_{<i}\right)
+p(\mathbf{x}) = \prod_{i=1}^{L} p\left(x_i \mid x_{<i}\right),
 $$
 
-carries four structural commitments, and each is a place where an alternative
-paradigm can buy something:
+and this identity is *exact*: no approximation is made, which is why AR models
+optimize true maximum likelihood and report exact perplexities. Three
+engineering consequences follow, and each matters later.
 
-1. **Sequential decoding.** Producing $L$ tokens costs $L$ sequential forward
-   passes. Latency is lower-bounded by sequence length no matter how much
-   hardware parallelism is available.
-2. **Unidirectional context.** Token $i$ sees only $x_{<i}$. Infilling,
-   editing, and constraint satisfaction ("end the sentence with *frost*") are
-   structurally awkward.
-3. **Exposure bias.** Trained on ground-truth prefixes, the model consumes its
-   own samples at inference; errors compound along a single committed path.
+**Training is parallel even though generation is not.** With ground-truth text
+available, all $L$ conditional predictions can be computed in one forward pass
+of a causally masked Transformer (teacher forcing). AR training saturates
+accelerators; only *decoding* is sequential.
+
+**The KV cache makes decoding cheap.** Causal attention means a new token
+never changes the representations of earlier tokens. Their attention keys and
+values can be computed once and cached, so generating token $i+1$ costs
+attention over $i$ cached entries rather than a full recompute. Sequential,
+but each step is light. Hold onto this: the KV cache is the single hardest
+thing for diffusion to replace, and chapters 5 and 7 are largely about buying
+it back.
+
+**Exposure bias is baked in.** The model trains on ground-truth prefixes but
+consumes its own imperfect samples at inference. Errors compound along a
+single committed path, with no mechanism to revisit an earlier token.
+
+## Four structural commitments
+
+None of this is broken. But the left-to-right factorization carries four
+commitments, and each is a place where an alternative paradigm can buy
+something:
+
+1. **Sequential decoding.** Producing $L$ tokens costs $L$ sequential passes;
+   latency is lower-bounded by sequence length no matter how much hardware
+   parallelism is available. A 1024-token answer takes 1024 round trips
+   through the network.
+2. **Unidirectional context.** Token $i$ sees only $x_{<i}$. The model never
+   revises an early token in light of a later one, which is structurally
+   awkward for infilling a hole in existing code, editing a document, or
+   satisfying a constraint like "end the sentence with *frost*". AR systems
+   need dedicated fill-in-the-middle training even to approximate this, and
+   the gap still conditions only on a rearranged "left" context.
+3. **Exposure bias.** The compounding-error problem above: one committed
+   path, no revision.
 4. **A fixed generation order.** Left to right is one ordering of a joint
-   distribution, and not obviously the best one for code, math, or structured
-   documents.
+   distribution, and not obviously the right one for code, math, or any
+   output where some tokens are far easier to decide once others are fixed.
+   Ask yourself where you would start writing a sonnet whose last word is
+   fixed; it is probably not the first word.
 
 <Callout kind="intuition">
 Think of AR as writing with a pen that cannot be lifted: each word is final
-the instant it is written. Diffusion is writing in pencil on the whole line at
-once: sketch every position roughly, sharpen the positions you are most
-confident about, erase and redo the rest. Pencil-and-revise can use the whole
-page as context and fill it in any order, but each sharpening pass costs a
-full read of the page.
+the instant it is written, and you must commit to word $i$ before you may
+think about word $i{+}1$. Diffusion is writing in pencil on the whole line at
+once: sketch every position roughly, sharpen the ones you are most confident
+about, erase and redo the rest. Pencil-and-revise can use the whole page as
+context and fill it in any order, but each sharpening pass costs a full read
+of the page. That single sentence contains most of the trade-offs in this
+tutorial.
 </Callout>
+
+## One design space, two points
+
+Here is the reframe that organizes everything on this site. Autoregression can
+itself be described as a *corruption* process: take clean text and truncate
+it, hiding everything after position $i$. Training then teaches the model to
+predict clean tokens given the corrupted (truncated) view. Diffusion does the
+same thing with a different corruption: hide a *random subset* of positions
+rather than a suffix.
+
+<Callout kind="keyidea">
+**Generative sequence modelling is repeatedly predicting clean tokens from a
+corrupted context.** Autoregression and diffusion are two points in one design
+space. They differ only in (i) the **corruption process** that defines what "a
+partially observed sequence" means, truncation versus masking, and (ii) the
+**decoding order** in which positions are committed, fixed left-to-right
+versus adaptive and parallel. Every capability difference in this tutorial,
+parallel decoding, bidirectional context, self-correction, and also the
+likelihood gap and the cache problem, is a consequence of those two choices.
+Chapter 5 exhibits the model that dials continuously between the two points.
+</Callout>
+
+The word "diffusion" earns its place because the masking corruption is applied
+*gradually*: a noise level $t$ runs from 0 (clean text) to 1 (all masks), and
+the model learns to reverse the corruption from every intermediate level. That
+is structurally the same recipe that generates images from Gaussian noise, and
+chapter 2 shows the text version is actually *simpler*: no Gaussians, no score
+functions, just masks and cross-entropy.
 
 ## The scoreboard, as of July 2026
 
-Diffusion is not a free lunch. It pays in likelihood (a dLLM reports a bound,
-not an exact number), in sampling compute (each denoising step is a full
-forward pass), and in engineering maturity (the KV cache that makes AR
-inference cheap does not transfer cleanly). What it buys: parallel decoding,
-bidirectional context, native infilling, and revisable generation. At the
-7&ndash;8B scale, pure masked-diffusion models such as LLaDA<Ref k="nie2025large" />
-and Dream<Ref k="ye2025dream" /> are reported competitive with similarly sized
-AR models, and commercial systems<Ref k="labs2025mercury" /><Ref k="song2025seed" />
-serve diffusion-style decoding at over 1,000 tokens per second.
+What has this alternative actually delivered?
+
+**Scale parity, at least at 8B.** LLaDA trained a pure masked-diffusion 8B
+model from scratch on 2.3T tokens and reports it competitive with strong
+similarly sized AR models such as Llama 3 8B on in-context learning
+benchmarks<Ref k="nie2025large" />. Dream 7B matched that starting from
+Qwen2.5 weights at a fraction of the cost<Ref k="ye2025dream" />. These are
+existence proofs, not dominance: nobody claims diffusion beats the best AR
+model at matched compute on general language modelling.
+
+**Structural wins where bidirectionality matters.** A masked dLLM handles the
+"reversal curse" (completing *B to A* after training on *A to B*) that trips
+much larger left-to-right models<Ref k="nie2024scaling" />, and infilling is
+native: mask the gap, run the denoiser, both sides are context automatically.
+
+**Commercial speed.** Mercury reports 1,109 tokens per second for its Coder
+Mini model on H100 in independent evaluations<Ref k="labs2025mercury" />; Seed
+Diffusion reports 2,146 tokens per second on H20<Ref k="song2025seed" />;
+Gemini Diffusion is Google DeepMind's experimental entry<Ref k="deepmind2025gemini" />.
+Chapter 5 dissects what these systems actually are.
+
+**The honest costs.** A dLLM reports a likelihood *bound*, not an exact
+number. Each denoising step is a full forward pass over all positions, and
+the exact KV cache does not transfer. The tooling, serving stacks, and
+post-training recipes are years younger than AR's. Chapters 4, 6, and 7
+quantify each of these.
 
 <Callout kind="caveat">
-The honest framing, which this site maintains throughout, is a trade-off
-surface rather than a winner. The scaling claims above are recent and mostly
-single-source; the mathematics is stable, the empirical frontier is not. Where
-a number matters, we cite its exact source, and where it is a bound rather
-than a measurement, we say so.
+The honest framing, maintained throughout this site, is a trade-off surface
+rather than a winner. The scaling claims above are recent and mostly
+single-source; the mathematics is stable, the empirical frontier is not.
+Where a number matters we cite its exact source, and where it is a bound
+rather than a measurement we mark it. When you see a bare "diffusion is
+faster" or "diffusion matches AR" claim anywhere, your first question should
+be: at what operating point, measured how?
 </Callout>
 
-Ready for the machinery? The next chapter builds the masked-diffusion
-objective, and it is simpler than you expect: the entire thing collapses to
-weighted fill-in-the-blanks.
+## How to read this site
+
+Chapters build in order, but three shortcuts work. The **fast path** to
+understanding a modern dLLM is chapters 1, 2, 4, and 6: the anchor, the
+objective, the decoder, and the taxonomy. **Practitioners** deciding what to
+deploy should add chapters 5 and 7: the block dial and the
+scaling/serving/post-training economics. **Safety and evaluation people** can
+jump from chapter 2 directly to chapters 8 and 9. Every chapter closes with
+pointers into the long-form PDF companion, which carries the full derivations
+and 26 exercises.
+
+<GoDeeper items={[
+  'Section 2 (The Autoregressive Baseline): teacher forcing, the KV cache, and AR-as-corruption, with algorithms',
+  'Section 1 (Two Paradigms): the anchor idea and the reading paths',
+  'Appendix A (Primer): probability, ELBO, and Transformer background if any of this page felt fast',
+]} />
 
 <RefList />

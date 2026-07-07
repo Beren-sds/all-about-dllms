@@ -2,86 +2,141 @@
 layout: ../layouts/Base.astro
 title: The Block Dial
 slug: 5-block-dial
-description: Autoregression and masked diffusion are the endpoints of one slider, and Block Diffusion built the dial.
+description: Autoregression and masked diffusion are endpoints of one slider; Block Diffusion built the dial, and the commercial systems live on it.
 ---
 
 import Callout from '../components/Callout.astro';
 import Ref from '../components/Ref.astro';
 import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
 import BlockDial from '../components/widgets/BlockDial.svelte';
 
 # The Block Dial
 
 Two requests break a pure masked dLLM outright. Ask it for a 10,000-token
-document: undefined, because the diffusion process only exists on the training
-canvas. Ask it to serve cheaply: every step recomputes bidirectional attention
-over all positions with no exact cache. Both failures share one cause, and the
-fix is a dial.
+document: undefined, because the diffusion process only exists on the
+fixed-length training canvas; generating past it is not a capability the
+model lacks but an operation that has no meaning. Ask it to serve cheaply:
+every step recomputes bidirectional attention over all positions with no
+exact cache. Both failures share one cause, the decision to cover the *whole
+sequence* with one diffusion process, and the fix is to make that coverage a
+dial.
 
 ## Autoregressive across blocks, diffusion within
 
-Partition the sequence into blocks of size $B$. Generate blocks left to right,
-each conditioned on all finished blocks; generate the tokens *within* each
-block by masked diffusion. The chain rule across blocks is exact, only the
+Partition the sequence into blocks of size $B$. Generate blocks left to
+right, each conditioned on all finished blocks; generate the tokens *within*
+each block by masked diffusion. The likelihood factorizes accordingly, and
+the factorization across blocks is the exact chain rule; only the
 within-block terms are bounds:
 
 $$
 \log p_\theta(\mathbf{x}) = \sum_{b} \log p_\theta\!\left(\mathbf{x}^{(b)} \mid \mathbf{x}^{(<b)}\right)
-\;\ge\; \sum_{b} -\mathcal{L}_{\text{masked}}\!\left(\mathbf{x}^{(b)} \mid \mathbf{x}^{(<b)}\right),
+\;\ge\; \sum_{b} -\mathcal{L}_{\text{masked}}\!\left(\mathbf{x}^{(b)} \mid \mathbf{x}^{(<b)}\right).
 $$
 
-so the overall bound tightens monotonically as $B$ shrinks, reaching exact AR
-likelihood at $B=1$ and the full masked NELBO at $B=L$. Block
-Diffusion<Ref k="arriola2025block" /> made this a trained architecture with a
-block-causal attention mask, and the dial is not a metaphor, it is a measured
-curve:
+Check the endpoints. At $B = 1$, a one-token block has exactly one mask
+pattern (fully masked), so each within-block "bound" is a single exact
+cross-entropy and the whole objective is ordinary autoregression: exact
+likelihood, full KV cache, one token per step. At $B = L$, there is one block
+and no prefix: pure masked diffusion. In between, the bound tightens
+monotonically as $B$ shrinks, and parallelism is capped at $B$ tokens per
+step.
+
+Block Diffusion (BD3-LM) made this a trained architecture<Ref k="arriola2025block" />
+with three load-bearing components. A **block-causal attention mask**: tokens
+attend bidirectionally within their own block and causally to all previous
+blocks, so finished blocks are frozen context. The **per-block masked
+objective** above, trained for all blocks in parallel with the same machinery
+as chapter 2. And **clipped noise schedules**: the authors identify gradient
+variance as a limiting factor of diffusion training (the same villain from
+chapter 2) and sample mask rates away from the uninformative extremes. The
+dial is not a metaphor; it is a measured curve, and you can drag it:
 
 <BlockDial client:visible />
 
-Three things come back at small $B$ that pure diffusion gave up: an **exact KV
-cache** across blocks (finished blocks never change), **unbounded generation
-length** (keep appending blocks), and a **tighter likelihood**. What is spent
-is parallelism, now capped at $B$ tokens per step. SSD-LM had already decoded
-in blocks of 25 in 2022<Ref k="han2022ssdlm" />; BD3-LM supplied the
-architecture, the training recipe, and the numbers.
+Three things come back at small $B$ that pure diffusion gave up. An **exact
+KV cache across blocks**: finished blocks never change, so their keys and
+values are cached precisely as in AR. **Unbounded generation length**: keep
+appending blocks. And a **tighter likelihood**: on LM1B the perplexity bound
+walks from MDLM's 31.78 down to 28.23 as $B$ drops from the full canvas to 4,
+against an AR reference of 22.83; the OpenWebText column behaves identically.
+What is spent is parallelism, now capped at $B$ tokens per step, and the
+bidirectional context window, now the block rather than the sequence.
+
+Historical credit where due: SSD-LM decoded semi-autoregressively in blocks
+of 25 back in 2022, with a *simplex-state* within-block
+process<Ref k="han2022ssdlm" />, a standing reminder that block structure and
+state space are independent axes. BD3-LM's contribution was the trained
+block-causal architecture, the objective, the variance fix, and the numbers.
 
 ## Three things "block diffusion" can mean
 
-The term is used for three distinct designs, and conflating them produces
-wrong conclusions about what a given system can do:
+The term is used for three distinct designs. Conflating them is the single
+most common confusion in reading dLLM system reports, so here is the
+disambiguation as a checklist:
 
-1. **A trained architecture** (BD3-LM, SSD-LM): block structure in the
-   weights; the cache is exact, the likelihood genuinely tightens, length is
-   unbounded.
+1. **A trained architecture** (BD3-LM, SSD-LM): block structure is in the
+   weights. The cache is exact, the likelihood genuinely tightens, length is
+   genuinely unbounded. Changing $B$ means retraining.
 2. **A decoding policy** on a full-canvas model (semi-autoregressive
-   unmasking for LLaDA): blocks order the commitments, but the model still
-   attends over the whole canvas. Quality changes; cache validity and the
-   length cap do not.
+   unmasking schedules for LLaDA and kin, chapter 4): blocks order the
+   *commitments*, but the model still attends bidirectionally over the whole
+   canvas. Quality changes; the likelihood, cache validity, and length cap do
+   not. Free to reconfigure at inference.
 3. **A serving approximation** (Fast-dLLM<Ref k="wu2025fastdllm" />): a
-   full-canvas model served *as if* block-causal, reusing stale activations
-   outside the active block, training-free, up to 27.6x throughput with small
-   measured accuracy deltas.
+   full-canvas model is *served* as if block-causal, reusing stale keys and
+   values outside the active block and refreshing at boundaries.
+   Training-free, up to 27.6x throughput, with small measured accuracy
+   deltas; the cache is approximate, bought rather than earned. dKV-Cache
+   plays the same game with a delay-based bet<Ref k="ma2025dkv" />: cache a
+   token's keys and values one step *after* it decodes, when its
+   representation has stabilized, for 2-10x.
+
+When you read a dLLM announcement, the first diagnostic question is: **where
+on the dial, and is it architecture, policy, or approximation?** The answer
+determines whether "fast" comes with exact math, changed math, or
+approximated math.
+
+## The commercial systems, read through this lens
+
+Mercury reports 1,109 and 737 tokens per second on H100 for its Coder Mini
+and Small models, measured by independent Artificial Analysis evaluations,
+and describes generation as parallel and
+coarse-to-fine<Ref k="labs2025mercury" />; the architecture is otherwise
+undisclosed. Seed Diffusion reports 2,146 tokens per second on H20 and does
+state its mechanism: block-level parallel sampling with a causal order
+between blocks, plus a two-stage training curriculum whose final phase mixes
+in *edit-based* corruption, perturbing real tokens rather than masking, to
+stop the sampler locking in early mistakes<Ref k="song2025seed" /> (a
+uniform-kernel idea earning its keep inside a masked system; chapter 6).
+Gemini Diffusion's page reports 1,479 tokens per second of sampling
+speed<Ref k="deepmind2025gemini" />.
 
 <Callout kind="caveat">
-Deployed "diffusion speed" is usually a blend of all three, and commercial
-systems disclose unevenly. Mercury reports 1,109 and 737 tokens per second on
-H100 for its Coder models (independent Artificial Analysis
-evaluations)<Ref k="labs2025mercury" /> but describes decoding only as
-parallel and coarse-to-fine. Seed Diffusion reports 2,146 tokens per second on
-H20 and does state its mechanism: block-level parallel sampling with a causal
-order between blocks<Ref k="song2025seed" />. Gemini Diffusion's page reports
-1,479 tokens per second of sampling speed<Ref k="deepmind2025gemini" />. These
-numbers sit on different hardware and different benchmarks; they jointly
-support "block-structured serving is fast," not any finer ranking.
+These numbers sit on different hardware, different task suites, and
+disclosure levels ranging from a paper to a product page. Jointly they
+support "block-structured serving is fast"; they do not support any finer
+ranking between systems, and none of the three can be cleanly placed among
+the three meanings above from public information alone. Deployed "diffusion
+speed" is best assumed to be a blend of trained structure, decoding policy,
+and approximation plus proprietary engineering.
 </Callout>
 
 <Callout kind="keyidea">
-The paradigm war ends here quietly. The systems people can actually use at
-scale are neither pure AR nor pure diffusion but a point on this dial, chosen
-for serving economics: enough diffusion for within-block parallelism, enough
-autoregression for a cache and unbounded length. When you read a dLLM
-announcement, your first question should be: **where on the dial, and is it
-architecture, policy, or approximation?**
+The paradigm war of chapter 1 ends here, quietly. The systems people can
+actually use at scale are neither pure AR nor pure diffusion but a point on
+this dial, chosen for serving economics: enough diffusion for within-block
+parallelism, enough autoregression for an exact cache and unbounded length.
+The dial's one interpretable parameter, $B$, buys likelihood and cache with
+one hand and sells parallelism with the other, and the measured curve above
+is the price list.
 </Callout>
+
+<GoDeeper items={[
+  'Section 21 (Block dLLMs): the hybrid bound, the attention-mask figure, BD3-LM component by component',
+  'Section 17 (AR versus Diffusion): the spectrum, the trade-off table, and where the perplexity gap comes from',
+  'Section 16 (Serving): the cache taxonomy in full, including Eso-LM exact caching',
+]} />
 
 <RefList />

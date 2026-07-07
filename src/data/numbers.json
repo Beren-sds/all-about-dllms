@@ -8,7 +8,7 @@
   { "value": "1109 / 2146", "label": "tokens per second: Mercury Coder Mini (H100) and Seed Diffusion (H20)", "ref": "labs2025mercury", "chapter": "5-block-dial" },
   { "value": "16x -> 1.4x", "label": "the SMDM trade: 16x pretraining compute buys 1.4x faster sampling at parity (not a scaling-law gap)", "ref": "nie2024scaling", "chapter": "7-making-useful" },
   { "value": "1.7B", "label": "largest published discrete-flow-matching language model", "ref": "gat2024discrete", "chapter": "3-origins" },
-  { "value": "up to 100%", "label": "keyword ASR of mask-infilling jailbreaks on an aligned dLLM", "ref": "wen2025devil", "chapter": "8-safety" },
+  { "value": "up to 100%", "label": "keyword ASR of mask-infilling jailbreaks on an aligned dLLM", "ref": "wen2025devil", "chapter": "9-safety" },
   { "value": "floor(log2 n) + 1", "label": "insertion-tree generation depth, already achieved in 2019", "ref": "stern2019insertion", "chapter": "3-origins" },
   { "value": "1.85M", "label": "parameters of the tiny dLLM whose real decodes power this site's widgets", "ref": null, "chapter": "4-decoding" }
 ]

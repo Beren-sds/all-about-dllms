@@ -1,0 +1,127 @@
+---
+layout: ../layouts/Base.astro
+title: Where dLLMs Earn Their Keep
+slug: 8-applications
+description: Code, proteins, and pixels adopt dLLMs where an AR weakness is structural to the domain; plus the open problems that decide the next two years.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
+
+# Where dLLMs Earn Their Keep
+
+The family grid says what each design can do; this chapter asks where anyone
+*needs* it. The pattern across all three domains is consistent enough to
+state up front, and it doubles as a prediction tool for whatever domain you
+work in: dLLMs get adopted where an AR weakness is **structural to the
+domain**, not where diffusion is generically "better at text".
+
+## Code: infilling is the product, latency is the pitch
+
+Code is the one domain with commercial dLLM products, and both of AR's
+structural weaknesses explain why. **Editing dominates real usage**:
+completing a hole in the middle of a file conditions on both sides, which is
+native infilling for a masked denoiser and a training hack for AR
+(fill-in-the-middle training that still conditions the gap on a rearranged
+"left" context). And **interactive latency is priced**: the throughput
+numbers of chapter 5 target the autocomplete loop, where waiting is the
+product's failure mode.
+
+The research arc is longer than the products suggest. CodeFusion argued the
+case at 75M parameters in 2023, reporting top-1 parity with far larger AR
+systems<Ref k="singh2023codefusion" />, and is also remembered for a sourcing
+lesson: its current arXiv version carries a formal note disclaiming an
+"inappropriately sourced conjecture" about a competitor model's parameter
+count that earlier drafts had cited from a news article. The result stands;
+the episode is a standing reminder to check where numbers come from, which is
+this site's own methodology. DiffuCoder then supplied the open 7B study,
+130B code tokens, plus the best published analysis of how code dLLMs decode
+and train under RL<Ref k="gong2025diffucoder" /> (chapter 7). The commercial
+layer, Mercury Coder and Seed Diffusion, is chapter 5's story.
+
+## Proteins: the mask objective fits the data's geometry
+
+Protein sequences have no canonical left-to-right reading: structural
+constraints couple residues at long range in both directions, which makes
+any-order, bidirectional modelling the natural prior rather than a clever
+trick. DPLM makes the case at ICML-paper grade: a masked diffusion protein
+LM that both generates "structurally plausible, novel, and diverse protein
+sequences" and, fine-tuned, compares favorably to ESM2 as a representation
+learner<Ref k="wang2024dplm" />, one objective serving generation and
+prediction. EvoDiff argues the sequence-only version of the program at
+evolutionary scale, "sequence is all you need"<Ref k="alamdari2023protein" />.
+And the protein thread closed a loop chapter 3 opened: discrete flow
+matching's flagship application was protein *co-design*, structure and
+sequence generated jointly under one CTMC<Ref k="campbell2024generative" />,
+a multimodality no AR factorization expresses cleanly.
+
+## Pixels and beyond: one objective across modalities
+
+"Mask a token, predict it" does not care what the token encodes, and the
+multimodal systems exploit exactly that indifference. MMaDA trains one masked
+objective across text and image tokens in a single
+model<Ref k="yang2025mmada" />; LLaDA-V builds a purely diffusion-based
+multimodal LLM by attaching a vision encoder to LLaDA through visual
+instruction tuning, leaving the language backbone's objective
+untouched<Ref k="you2025lladav" />. The contrast with the AR world, where
+image tokens must be forced into a serial order that has no perceptual
+meaning, is the structural argument.
+
+<Callout kind="keyidea">
+**Applications sort by which AR commitment they violate.** Code violates
+*unidirectionality* (editing needs both sides). Proteins violate *canonical
+order* (no left-to-right exists). Multimodality violates *serial
+tokenization* (pixels have no reading order). Where a domain violates none of
+the commitments, long-form chat being the canonical example, dLLMs compete
+only on serving economics, which is why the deployment map of 2026 looks the
+way it does: code products, protein research traction, multimodal
+prototypes, and AR everywhere else.
+</Callout>
+
+<Callout kind="caveat">
+The multimodal claim these systems support is "the objective composes across
+modalities", not "diffusion multimodality is ahead": the strongest multimodal
+systems as of 2026 remain AR or AR-hybrid at far larger scale. The protein
+results likewise establish fit, not dominance over specialized AR protein
+models at matched scale.
+</Callout>
+
+## The open problems that decide the next two years
+
+Honest tutorials end with what they cannot tell you. Five problems, each
+stated with what would resolve it:
+
+1. **Is the likelihood gap fundamental?** The any-order bound explains the
+   gap's existence, not its size or fate under scale. *Resolution*: a
+   compute-controlled scaling study across orders of magnitude, reporting
+   whether the gap shrinks to zero, plateaus, or follows a law, plus a
+   theoretical bound on the any-order deficit for finite-capacity models.
+   Until then, "diffusion will catch AR on likelihood" is a hope.
+2. **Few-step decoding for the masked kernel.** For the *uniform* kernel,
+   consistency distillation via the Gaussian dual delivers roughly
+   two-orders-of-magnitude sampling acceleration<Ref k="sahoo2025duo" />; the
+   absorbing kernel has no known Gaussian dual and no comparable recipe.
+   *Resolution*: matching many-step generative quality at $N = L/10$ on
+   language metrics for a masked dLLM.
+3. **Serving without exactness compromises.** The cache taxonomy of chapter
+   7 trades exactness for retrofit-ability. *Resolution*: either an exact
+   cache for full-canvas bidirectional attention (a structural discovery, if
+   it exists) or block/hybrid architectures winning outright so the question
+   dissolves.
+4. **Alignment on a bound.** Every post-training method inherits the noisy
+   ELBO (chapter 7); bias in one-step estimators and decoder-mediated reward
+   hacking are unstudied. *Resolution*: an analysis bounding policy drift
+   under biased estimates, and red-teaming of the unmasking policy itself.
+5. **dLLM-native safety.** Chapter 9's subject: the attack surface is
+   documented, the defenses are directions. *Resolution*: an
+   infilling-aware alignment recipe with published at-scale evaluations, and
+   canvas-level moderation with measured overhead.
+
+<GoDeeper items={[
+  'Section 25 (Applications): code, proteins, and pixels with the full evidence',
+  'Section 27 (Open Problems): all problems with resolution criteria, ordered from concrete to structural',
+]} />
+
+<RefList />

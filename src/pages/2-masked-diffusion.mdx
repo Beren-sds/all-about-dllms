@@ -2,26 +2,56 @@
 layout: ../layouts/Base.astro
 title: How Masked Diffusion Works
 slug: 2-masked-diffusion
-description: The masked-diffusion objective collapses to a weighted cross-entropy over masked positions, and that simplicity is why it scaled first.
+description: The masked-diffusion objective collapses to a weighted cross-entropy over masked positions; the architecture is a plain bidirectional Transformer; and both facts are why it scaled first.
 ---
 
 import Callout from '../components/Callout.astro';
 import Ref from '../components/Ref.astro';
 import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
 
 # How Masked Diffusion Works
 
 Image diffusion corrupts with Gaussian noise, but tokens have no "a little bit
 noisy": a token is either the right one or a different one. Discrete diffusion
-therefore corrupts by *replacement*, and the variant that conquered language
-replaces tokens with a dedicated mask symbol `[M]`. This chapter builds that
-model in three steps, each simpler than the last.
+therefore corrupts by *replacement*, and this chapter builds the variant that
+conquered language. By the end you will have the full modern objective, the
+architecture that trains it, an honest account of what it costs, and the exact
+mathematical relationship to autoregression. None of it requires more than the
+chain rule and a logarithm.
 
-## The forward process: masking, gradually
+## Choosing the corruption: why the mask won
+
+D3PM, the founding paper of discrete diffusion, framed corruption as a Markov
+transition matrix applied per token per step, and studied a whole family of
+kernels<Ref k="austin2021structured" />. Two members matter for language:
+
+- **Uniform kernel**: with some probability, replace the token with a random
+  vocabulary token. Corrupted text looks like text with typos: plausible but
+  wrong tokens, silently scattered.
+- **Absorbing kernel**: with some probability, replace the token with a
+  dedicated mask symbol `[M]`. Once masked, always masked (the mask
+  "absorbs"), and real tokens never turn into other real tokens.
+
+The absorbing kernel has a property that turned out to dominate everything
+else: **corruption is observable**. The model can see exactly which positions
+are damaged (they display `[M]`) and which are trustworthy. Under the uniform
+kernel the model must first *detect* the damage before repairing it, and the
+training signal mixes detection errors with prediction errors. Observable
+corruption is the leading explanation for why absorbing/masking diffusion
+outperforms uniform diffusion in practice, though not the only hypothesis:
+masking also inherits BERT-shaped infrastructure, and the benchmarks that
+crown winners emphasize likelihood, where masking's tighter bound shines.
+Chapter 6 returns to what the uniform kernel gets in exchange (revision that
+lives in the state space itself, and a Gaussian dual that imports few-step
+samplers<Ref k="sahoo2025duo" />).
+
+## The forward process, precisely
 
 Fix a noise level $t \in [0,1]$. The forward process takes clean text
 $\mathbf{x}_0$ and masks each position independently with probability $t$
-(linear schedule; general schedules use a masking probability $1-\alpha_t$):
+(this is the linear schedule; general schedules replace $t$ by a masking
+probability $1-\alpha_t$):
 
 $$
 q\left(x_t^i \mid x_0^i\right) =
@@ -31,21 +61,14 @@ x_0^i & \text{with probability } 1-t \\
 \end{cases}
 $$
 
-At $t=0$ the text is clean; at $t=1$ it is all masks. Two properties make this
-kernel special among all discrete corruptions<Ref k="austin2021structured" />.
-First, masking is **absorbing**: once masked, a position stays masked, and a
-real token never turns into a different real token. Second, corruption is
-**observable**: the model can see exactly which positions are corrupted (they
-show `[M]`) and which are trustworthy. Under the alternative *uniform* kernel,
-corrupted positions are silently replaced by plausible wrong tokens, and the
-model must detect the damage before repairing it. Observable corruption is the
-leading explanation for why masked diffusion outperforms uniform diffusion in
-practice.
+At $t=0$ the text is clean; at $t=1$ it is a row of masks. A single sequence
+yields training examples at every corruption level, from "one blank to fill"
+to "reconstruct everything from nothing".
 
 ## The objective: weighted fill-in-the-blanks
 
-Diffusion training usually starts from a variational bound (an ELBO) with a
-sum of KL divergence terms. For the masking kernel, the whole apparatus
+Diffusion training classically starts from a variational bound (an ELBO) with
+a ladder of per-step KL terms. For the masking kernel, the entire apparatus
 collapses<Ref k="sahoo2024simple" /><Ref k="shi2024simplified" />. The
 negative ELBO becomes
 
@@ -59,7 +82,9 @@ $$
 Read it aloud: *mask some tokens, predict the originals, weight by noise
 level*. It is BERT's training signal upgraded to a principled generative
 model, with the mask-ratio curriculum and the weight $w(t)$ derived rather
-than guessed.
+than guessed. Minimizing it maximizes a lower bound on the data
+log-likelihood, so the model is a real generative model with a real (if
+bounded) likelihood, not a heuristic infiller.
 
 <details class="derivation">
 <summary>Why the ELBO collapses (sketch)</summary>
@@ -67,20 +92,60 @@ than guessed.
 Two facts do the work. (1) Under the absorbing kernel, the per-step posterior
 $q(x_{t-1}^i \mid x_t^i, x_0^i)$ is nontrivial only at masked positions, and
 there it either stays masked or reveals the true token, so each KL term
-reduces to a cross-entropy against the clean token. (2) Summing the per-step
-terms over a finer and finer time grid turns the sum into an integral over
-$t$, whose integrand is the masked cross-entropy weighted by the schedule's
-rate, $w(t) = -\alpha_t'/(1-\alpha_t)$. The full derivation is Appendix E of
-the companion PDF.
+reduces to a cross-entropy against the clean token. (2) Summing per-step terms
+over a finer and finer time grid turns the sum into an integral over $t$ whose
+integrand is the masked cross-entropy weighted by the schedule's rate,
+$w(t) = -\alpha_t' / (1-\alpha_t)$. Substituting the linear schedule
+$\alpha_t = 1-t$ gives $w(t) = 1/t$. The full derivation, every step, is
+Appendix F of the PDF companion.
 </details>
 
-## Time is optional, and order is free
+## A worked example, seven characters
 
-The most surprising structural fact about this model: the noise level $t$
-does not need to be given to the network at all. The mask pattern already
-encodes it, and the optimal denoiser is provably time-independent<Ref k="ou2024absorbing" />.
-That result has a deep consequence. Rewriting the objective without time
-reveals it is exactly **any-order autoregression**:
+Take `T H E _ C A T` with positions 4 and 6 masked at $t = 0.5$, so
+$w = 2$. The model sees `T H E [M] C [M] T` and must place probability on the
+originals at the masked slots. Suppose it assigns the true tokens
+probabilities $0.5$ and $0.25$. This draw contributes
+
+$$
+w \cdot \left(-\log 0.5 - \log 0.25\right) = 2 \times (0.693 + 1.386) \approx 4.16 \text{ nats.}
+$$
+
+That is the entire loss computation. No noise vectors, no score functions, no
+KL tables, and note what the model exploited: the masked position 4 is
+constrained by context on *both* sides. A left-to-right model predicting
+position 4 would see only `T H E`.
+
+## The architecture underneath: a Transformer minus one mask
+
+Nothing in the objective specifies a network. In practice the denoiser
+$p_\theta(x_0^i \mid \mathbf{x}_t)$ of every modern dLLM is an almost
+unmodified Transformer, and the deltas from GPT are worth listing exactly,
+because they explain why the paradigm could scale so fast:
+
+- **Delete the causal mask.** Every position attends to every other, since
+  inferring a masked token needs both left and right context. This one change
+  is simultaneously the source of the bidirectionality advantage *and* of the
+  KV-cache problem: masklessness buys context and forfeits caching.
+- **Keep the vocabulary head.** The output is a softmax over the vocabulary
+  at every position, identical to an AR model's head. There is no separate
+  "noise head" and no regression target.
+- **Drop time conditioning entirely.** Continuous diffusion injects the noise
+  level through embeddings and adaptive normalization. For masked diffusion,
+  a remarkable result says the optimal denoiser is **time-independent**: the
+  mask pattern already encodes the noise level<Ref k="ou2024absorbing" />.
+  Several dLLMs therefore condition on nothing but the partially masked
+  sequence.
+
+The practical upshot is large: a dLLM reuses AR pretraining infrastructure,
+kernels, and even weights (chapter 6's adapted family) almost verbatim,
+swapping only the attention mask and the loss. The paradigm shift lives in the
+objective and the decoder, not the network.
+
+## The deepest fact: any-order autoregression
+
+Because time is removable, the objective can be rewritten with no reference to
+noise levels at all, and what appears is exact and surprising:
 
 $$
 \mathcal{L} \;=\;
@@ -88,46 +153,70 @@ $$
 -\log p_\theta\!\left(x_0^{\sigma(i)} \mid x_0^{\sigma(<i)}\right),
 $$
 
-an average of AR losses over *uniformly random generation orders* $\sigma$.
+an average of autoregressive losses over *uniformly random generation orders*
+$\sigma$<Ref k="ou2024absorbing" /><Ref k="shi2024simplified" />.
 
 <Callout kind="keyidea">
 **AR is masked diffusion restricted to one order, and masked diffusion is AR
-averaged over all orders.** Everything else follows from this single
-difference: parallel decoding, bidirectional context, self-correction, and
-also the likelihood gap. Fixing the order recovers the exact chain rule (best
-perplexity) but forfeits parallelism and revision. Averaging over orders buys
-any-direction context and many-tokens-per-step, but turns the exact likelihood
-into a bound, because one network must fit all $L!$ orders with finite
-capacity.
+averaged over all $L!$ orders.** Everything else follows from this single
+difference. Fixing the order recovers the exact chain rule, hence exact
+maximum likelihood and the best perplexity, but forfeits parallelism and
+revision. Averaging over orders buys any-direction context and
+many-tokens-per-step, but a single network must now fit every order with
+finite capacity, so its per-order fit is looser, and its reported
+"perplexity" is an upper bound computed from the ELBO rather than an exact
+number. When you see a dLLM perplexity next to an AR perplexity, you are
+seeing a bound next to a measurement; honest tables mark the difference.
 </Callout>
 
-## A worked example, five tokens
+Two distinct forces separate the paradigms on likelihood, and it pays to name
+them: **averaging versus specializing** (one network spread over all orders
+versus specialized to one) and **bound versus exact** (ELBO versus true NLL).
+Both shrink with scale and better schedules; neither vanishes. The flip side
+is that the very thing that costs likelihood, training on all orders, is what
+enables parallel decoding, bidirectional context, native infilling, and the
+reversal-curse win, none of which a single-order objective can provide.
 
-Take the sequence `T H E _ C A T` with positions 4 and 6 masked at $t = 0.5$
-(so $w = 2$): the model sees `T H E [M] C [M] T` and must place probability on
-the originals at the masked slots. Suppose it assigns the true tokens
-probabilities $0.5$ and $0.25$. This draw contributes
+## Training it at scale: three practical choices
 
-$$
-w \cdot \left(-\log 0.5 - \log 0.25\right) = 2 \times (0.693 + 1.386) \approx 4.16 \text{ nats.}
-$$
+Three implementation decisions separate a toy from an 8B dLLM, each a direct
+consequence of the objective:
 
-That is the entire loss computation: no noise vectors, no score functions, no
-KL tables. A modern dLLM is a plain bidirectional Transformer with a softmax
-head trained on exactly this quantity at scale<Ref k="nie2025large" />.
+1. **Estimator variance.** The loss is a Monte Carlo estimate of an integral
+   over $t$, and $w(t) = 1/t$ *diverges* as $t \to 0$. Naive uniform sampling
+   of $t$ yields rare, enormous gradient contributions from lightly masked
+   draws. Scale controls this with stratified (low-discrepancy) noise-level
+   sampling and related variance reduction. This is not a footnote: when we
+   trained the 1.85M-parameter model behind this site's widgets, the naive
+   estimator stalled training at the unigram level for thousands of steps,
+   and the diagnosis chain is written up in the PDF's appendix. The same
+   variance problem returns at higher stakes in preference optimization and
+   RL (chapter 7).
+2. **Instruction tuning by partial masking.** Supervised fine-tuning keeps
+   the prompt clean and masks only the response, so the model learns
+   $p_\theta(\text{response} \mid \text{prompt})$ under the same objective
+   used in pretraining<Ref k="nie2025large" />. No architectural change, just
+   a restriction of which positions may be masked.
+3. **Compute per step.** Bidirectional attention with no cache means every
+   step is a full pass over all positions. Pretraining cost is comparable to
+   AR (both do full passes anyway); the asymmetry is baked in at *inference*,
+   which is chapter 4's subject.
 
 <Callout kind="caveat">
-Simplicity of the loss does not mean the *estimator* is tame: $w(t)$ diverges
-as $t \to 0$, and naive Monte Carlo sampling of $t$ produces rare, enormous
-gradient spikes. Production systems control this with stratified noise-level
-sampling and related variance reduction, and the same variance problem
-resurfaces in preference optimization and RL (chapter 7). When we trained the
-small model that powers this site's widgets, the naive estimator stalled
-training entirely; the fix and the diagnosis chain are documented in the
-companion PDF's appendix.
+Three caveats worth carrying forward. The "why masking won" story above is the
+leading explanation, not a theorem, and chapter 6 gives the competing
+hypotheses their own hearing. The any-order freedom is a fact about
+*training*; chapter 4 shows deployed dLLMs exercise surprisingly little of it.
+And the ELBO-versus-NLL gap means every likelihood comparison in the
+literature needs a footnote; chapter 7's evaluation rules make that footnote
+mandatory.
 </Callout>
 
-The objective explains what dLLMs learn. What made them *possible* is a
-longer story, and it starts years before diffusion touched text.
+<GoDeeper items={[
+  'Sections 7-8 (D3PM, SEDD): transition matrices, continuous-time discrete diffusion, and score entropy, the machinery this chapter compressed',
+  'Section 10 (Masked Diffusion) and Appendix F: the NELBO collapse, every algebraic step',
+  'Section 12 (Scaling Up): LLaDA and Dream training choices in full',
+  'Appendix H (Build One): the 1.85M-parameter model, its training pathology, and the fix',
+]} />
 
 <RefList />

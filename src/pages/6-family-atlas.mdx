@@ -2,12 +2,13 @@
 layout: ../layouts/Base.astro
 title: The Family Atlas
 slug: 6-family-atlas
-description: Four design axes classify every dLLM ever shipped; families are clusters, adapted is a flag, and flow matching is the formalism spanning them.
+description: Four design axes classify every dLLM ever shipped; each family gets its identity card, the adapted flag gets its recipe, and the bake-offs get named hypotheses.
 ---
 
 import Callout from '../components/Callout.astro';
 import Ref from '../components/Ref.astro';
 import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
 import FamilyAtlas from '../components/widgets/FamilyAtlas.svelte';
 
 # The Family Atlas
@@ -15,80 +16,171 @@ import FamilyAtlas from '../components/widgets/FamilyAtlas.svelte';
 Ask three engineering questions of "a dLLM": does it keep a KV cache? Can it
 generate longer than its training canvas? Is its reported likelihood exact or
 a bound? For LLaDA the answers are *no, no, bound*. For a Block Diffusion
-model: *yes, yes, tighter hybrid*. One label returning opposite answers is not
-doing its job, so replace the label with coordinates.
+model: *yes, yes, tighter hybrid*. A label that returns opposite answers to
+the same deployment questions is not doing its job, so this chapter replaces
+the label with coordinates, then walks every family that occupies them.
 
 ## Four axes locate every model
 
 1. **State space**: where the corruption lives. Absorbing (`[M]`), uniform
    (token to token), or continuous (embeddings / simplex).
-2. **Granularity**: full canvas, or blocks of size $B$ (chapter 5's dial).
-3. **Provenance**: from scratch, or adapted from a pretrained AR checkpoint.
-4. **Decoding policy**: random, confidence-based, semi-AR, or distilled
-   few-step (chapter 4; changeable after training).
+2. **Granularity**: how much of the sequence one diffusion process covers.
+   Full canvas, or blocks of size $B$ (chapter 5's dial).
+3. **Provenance**: where the weights start. From scratch, or adapted from a
+   pretrained AR checkpoint.
+4. **Decoding policy**: how positions commit at inference. Random,
+   confidence-based, semi-AR schedules, or distilled few-step (chapter 4).
 
-Deployment properties are *consequences*, not extra axes: cache, length cap,
-and likelihood tightness follow from granularity; self-correction from state
-space plus policy; training cost from provenance. The axes are orthogonal:
-Dream is masked by state and granularity but *adapted* by
-provenance<Ref k="ye2025dream" />, and SSD-LM is continuous by state but
-blockwise by granularity<Ref k="han2022ssdlm" />.
+The first three are training-time commitments baked into the model; the
+fourth changes after the fact. Deployment properties are *consequences*, not
+extra axes: cache, length cap, and likelihood tightness follow from
+granularity; self-correction from state space plus policy; training cost from
+provenance. And the axes are orthogonal, which prevents the standard
+conflation: "masked versus block" is a granularity distinction, "scratch
+versus adapted" is provenance, and a model sits anywhere on both at once.
+Dream is masked by state and granularity, adapted by
+provenance<Ref k="ye2025dream" />; SSD-LM is continuous by state, blockwise by
+granularity<Ref k="han2022ssdlm" />.
 
 <FamilyAtlas client:visible />
 
-## The families in one paragraph each
+## Masked dLLMs: the mainstream, with a roster
 
-**Masked dLLMs** are the mainstream: absorbing state, full canvas. LLaDA
-proved the objective is a complete substitute for next-token prediction at 8B
-scale with 2.3T tokens from scratch<Ref k="nie2025large" />; Dream matched it
-from a Qwen2.5 initialization at 0.6T<Ref k="ye2025dream" />; MMaDA extended
-it across modalities<Ref k="yang2025mmada" /> and LLaDA-MoE made it
-sparse<Ref k="zhu2025lladamoe" />.
+Absorbing state, full canvas: what a 2025-26 paper means by "dLLM"
+unqualified. The family's dominance has a mechanical explanation assembled in
+chapter 2: observable corruption makes the loss clean supervised
+gap-filling, the objective is the one loss the LLM stack is optimized for,
+and time-independence leaves a plain bidirectional Transformer. The roster,
+each entry reduced to what it adds to the *family*:
 
-**Block dLLMs** trade capped parallelism for an exact cache and unbounded
-length, and are where the commercial systems live (chapter 5).
+| Model | Provenance | Tokens | Family-relevant contribution |
+|---|---|---|---|
+| LLaDA 8B<Ref k="nie2025large" /> | scratch | 2.3T | existence proof: masked diffusion alone reaches AR-competitive quality at 8B |
+| Dream 7B<Ref k="ye2025dream" /> | adapted (Qwen2.5 7B) | 0.6T | AR initialization plus token-level noise rescheduling |
+| LLaDA 1.5<Ref k="zhu2025llada" /> | post-trains LLaDA | -- | variance-reduced preference optimization on the ELBO |
+| LLaDA-MoE<Ref k="zhu2025lladamoe" /> | scratch | ~20T | sparse mixture-of-experts backbone, 7B parameters with 1.4B active |
+| MMaDA<Ref k="yang2025mmada" /> | -- | -- | one masked objective across text and image tokens |
 
-**Adapted dLLMs** are a provenance flag, not a rival family. The
-DiffuGPT/DiffuLLaMA recipe converts 127M-7B AR checkpoints with less than 200B
-tokens using attention-mask annealing and a kept shift
-operation<Ref k="gong2024scaling" />, roughly an order of magnitude cheaper
-than from-scratch. The flag travels across families: TESS 2 adapted Mistral-7B
-into a *simplex-space* dLLM<Ref k="tae2025tess" />.
+Read column-wise, the family is maturing along three independent tracks,
+capability (alignment), efficiency (sparsity, adaptation), and scope
+(multimodality), without changing its identity card. Its three costs are
+family properties, not model bugs: the canvas is fixed, the cache is
+approximate at best, and the any-order freedom mostly goes unexercised at
+deployment.
 
-**Uniform-state dLLMs** let any token become any other, so revision lives in
-the state space itself rather than in a remasking policy. Historically weakest
-on likelihood, the family was revived by the diffusion duality: uniform-state
-diffusion is the argmax projection of a Gaussian diffusion, which imports
-consistency distillation and few-step sampling roughly two orders of magnitude
-faster<Ref k="sahoo2025duo" />.
+## The adapted flag: an AR checkpoint is most of a dLLM
 
-**Continuous-state dLLMs** (embedding or simplex) retreated to the niche where
-they are irreplaceable: classifier *gradients* act natively only on a
-continuous carrier, so gradient-steered generation still runs through
-them<Ref k="li2022diffusionlm" /><Ref k="karimimahabadi2024tess" />.
+Training LLaDA from scratch cost 2.3T tokens and 0.13 million H800 GPU-hours,
+spent in large part relearning what every public AR checkpoint already knows.
+The any-order identity says exactly how wasteful that is: an AR model already
+solves the left-to-right *slice* of the objective a masked dLLM must solve for
+all orders. The adaptation recipe (DiffuGPT / DiffuLLaMA) converts 127M-7B
+GPT-2 and LLaMA-2 checkpoints with **less than 200B tokens**, an
+order-of-magnitude saving, using three bridges<Ref k="gong2024scaling" />:
+**attention-mask annealing** (open the causal mask gradually rather than
+confronting pretrained weights with alien activations), a kept **shift
+operation** (preserve the AR input-output geometry), and **no time embedding**
+(chapter 2's time-independence means the architecture needs no new
+conditioning path). Dream is the flagship: Qwen2.5 7B init, 0.6T tokens,
+competitive quality, plus context-adaptive token-level noise rescheduling so
+the tight token budget is not wasted on already-determined
+tokens<Ref k="ye2025dream" />. And the flag travels across families: TESS 2
+adapted Mistral-7B into a *simplex-space* dLLM by continued pretraining with
+the diffusion loss<Ref k="tae2025tess" />.
 
-**Hybrids** attack the within-step independence directly: EDLM corrects each
-step with a sequence-level energy model<Ref k="xu2025energy" />, and Eso-LM
-fuses AR and masked phases with an exact KV cache while preserving parallel
-generation<Ref k="sahoo2026esoteric" />.
+Why does AR initialization help so much? Three named hypotheses, deliberately
+kept apart: **H1, representation transfer** (token embeddings, syntax, world
+knowledge survive the mask change; only attention must adjust, which is why
+*annealing* matters); **H2, objective overlap** (AR training already minimized
+one term of the any-order expectation, so adaptation starts partway down the
+same loss surface); **H3, data quality by proxy** (the adapted model inherits
+its parent's curated corpus for free). The recipes' success is replicated;
+the mechanism split is not, and no controlled study separates the three as of
+2026.
+
+## Uniform-state dLLMs: revision in the state space
+
+The uniform kernel lets any token become any other, so a decoded-then-wrong
+token can be corrected *by the process itself* rather than by a bolt-on
+remasking policy. The family historically lost on likelihood (unobservable
+corruption; chapter 2), then got two revivals. The **diffusion duality**
+shows uniform-state discrete diffusion is the argmax projection of an
+underlying Gaussian diffusion, which imports the continuous toolbox
+wholesale: variance-reduced curricula and consistency distillation, bringing
+few-step sampling roughly two orders of magnitude faster, to a family where
+the absorbing kernel has no comparable recipe<Ref k="sahoo2025duo" />. And in
+production, Seed Diffusion's final training phase mixes in *edit-based*
+corruption, perturbing real tokens, precisely to stop the sampler locking in
+early mistakes<Ref k="song2025seed" />: a uniform-kernel idea inside a
+mask-trained commercial system.
+
+## Continuous-state dLLMs: where gradients still matter
+
+The embedding and simplex route of chapter 3 retreated to the niche where a
+continuous state is irreplaceable: classifier *gradients* act natively only
+on a continuous carrier. Diffusion-LM demonstrated plug-and-play control
+first<Ref k="li2022diffusionlm" />; Plaid established the route scales at all
+by beating GPT-2 124M on likelihood<Ref k="gulrajani2023likelihood" />; TESS
+refined the simplex design and TESS 2 scaled it to a 7B generalist by
+adaptation<Ref k="karimimahabadi2024tess" /><Ref k="tae2025tess" />. When the
+deployment question is "steer generation with an arbitrary differentiable
+scorer", this family remains the only native answer. The standing tax is the
+rounding leak, and the likelihoods trail the masked family.
+
+## Hybrids: attacking the within-step independence
+
+The newest branch does not pick a state space; it fixes the reverse step. The
+factorized within-step sampler, positions drawn independently given the
+canvas, is the residual approximation error of every dLLM (chapters 3, 4, 7).
+EDLM corrects it with a *sequence-level energy model* at each step, in
+residual form with parameters obtainable from a pretrained AR model, sampled
+by parallel importance sampling<Ref k="xu2025energy" />. Eso-LM fuses AR and
+masked phases inside one model, interpolating between their perplexities, and
+introduces exact KV caching for the masked-diffusion phase while preserving
+parallel generation<Ref k="sahoo2026esoteric" />, a different route to the
+cache than block structure: restructure the computation, not the
+factorization.
+
+## Why masking won, and what would reopen the question
+
+The mainstream's victory has three candidate explanations that assign
+different futures to the minority families. **H1, learning-signal purity**:
+observable corruption makes training clean gap-filling; if this is the whole
+story, the minorities stay niche. **H2, infrastructure gravity**: masking is
+BERT-shaped and time-free, so it fit existing pipelines first, meaning the
+gap is contingent. **H3, metric bias**: benchmarks reward likelihood bounds
+and single-pass quality (absorbing's strengths) and underweight revision and
+distillability (the minorities' strengths). The duality result cuts against a
+pure H1 reading, since it shows the uniform family's training difficulties
+yield to curriculum and imported machinery. A matched-compute,
+matched-data comparison at 7B scale, reporting both likelihood and
+revision-sensitive metrics, would settle most of it; as of 2026 it does not
+exist.
 
 <Callout kind="keyidea">
 **Families are coordinates, not tribes, and the frontier is already mixing
-them.** Seed Diffusion trains with mask corruption then edit corruption, a
-uniform-family idea inside a mask-trained block-decoded
-system<Ref k="song2025seed" />. Dream is masked with AR provenance. Fast-dLLM
-makes a full-canvas model serve like a block one<Ref k="wu2025fastdllm" />.
-Reading off the four coordinates of a new release remains the fastest way to
-know what it can and cannot do; that is exactly what the quiz above trains.
+them.** Seed Diffusion trains masked then edit-based; Dream is masked with AR
+provenance; Fast-dLLM makes a full-canvas model serve like a block one;
+Eso-LM fuses paradigms outright. The pure families are best read as basis
+vectors: real systems are combinations, and reading off the four coordinates
+of a new release, which is exactly what the quiz above trains, remains the
+fastest way to know what it can and cannot do.
 </Callout>
 
 <Callout kind="caveat">
-The minority families are graded on a curve: their flagship results live at
-1-7B research scale while the masked and block families ship as products, so
-"revived" means scientifically active, not deployed. And one deliberate
-absence from the atlas: discrete flow matching is not a family but a
-*formalism* spanning them (chapter 3); the mask corner of its path family is
-precisely the masked column here.
+Grading is on a curve: every masked and block flagship is an LLM-scale
+product of an industrial lab, while the minority families' flagship results
+live at 1-7B research scale, so "revived" means scientifically active, not
+deployed. One deliberate absence from the atlas: discrete flow matching is
+not a family but a *formalism* spanning them (chapter 3); its mask-source
+corner is precisely the masked column here, and its non-mask corners are
+where several minority-family ideas are now being rewritten.
 </Callout>
+
+<GoDeeper items={[
+  'Sections 19-23 (the Field Guide): identity cards, the roster with verified particulars, and the family grid table',
+  'Section 22 (Adapted dLLMs): the full adaptation recipe and the H1/H2/H3 distinguishing evidence',
+  'Section 23 (Minority Families): duality, Plaid, TESS, EDLM, Eso-LM, and the "why masking won" bake-off in full',
+]} />
 
 <RefList />

@@ -2,85 +2,136 @@
 layout: ../layouts/Base.astro
 title: The Decoding Playground
 slug: 4-decoding
-description: The number of denoising steps is a free parameter, the order of commitment is a policy, and both are measured live on this page.
+description: Steps and order are the two dials AR never had; both are measured live on this page, along with the failure modes.
 ---
 
 import Callout from '../components/Callout.astro';
 import Ref from '../components/Ref.astro';
 import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
 import DecodingPlayground from '../components/widgets/DecodingPlayground.svelte';
 import NfeExplorer from '../components/widgets/NfeExplorer.svelte';
 
 # The Decoding Playground
 
 Diffusion's promised advantage, emit many tokens per step instead of one, is
-realized or squandered entirely at decoding time. This chapter's widgets run
-on a real model: a 1.85M-parameter character-level masked dLLM trained on
-Shakespeare specifically for this tutorial, with an identical autoregressive
-twin as the referee. Small enough to train on a laptop, real enough that every
-curve below is a measurement.
+realized or squandered entirely at decoding time. Training gives you a
+denoiser; *how you call it* determines speed, quality, and most of the
+failure modes. This chapter's widgets run on a real model: a 1.85M-parameter
+character-level masked dLLM trained on Shakespeare for this tutorial, with an
+identical autoregressive twin (same architecture, same data, same steps,
+different attention mask and loss) as the referee. Small enough to train on a
+laptop; real enough that every curve below is a measurement, not a sketch.
 
-## The knob: number of function evaluations
+## The first dial: number of function evaluations
 
-An AR model generating $L$ tokens performs exactly $L$ sequential passes, not
-negotiable. A masked dLLM performs $N$ denoising steps, and $N$ is a **free
-parameter**: each step may commit many positions at once. $N = L$ recovers
-one-token-per-step; $N \ll L$ trades quality for a large latency win. Try it:
+An AR model generating $L$ tokens performs exactly $L$ sequential passes; not
+negotiable. A masked dLLM performs $N$ denoising steps, the **number of
+function evaluations** (NFE), and $N$ is a free parameter decoupled from $L$,
+because each step may commit many positions at once. $N = L$ recovers
+one-token-per-step (no speedup, best quality); $N \ll L$ commits several
+tokens per step in parallel (large speedup, some quality loss). The central
+inference problem of the whole paradigm is choosing where to sit on that
+curve. Try it yourself; drag the NFE control and watch how the same model
+becomes a different animal:
 
 <DecodingPlayground client:visible />
 
-Three commitment policies are available above, and they are not equal:
+## The second dial: which positions to commit
 
-- **Random order**: unmask a random subset each step, following the schedule.
-  This is what the raw theory samples, and it wastes the model's own
-  information.
-- **Confidence order**: commit the positions where the model's prediction is
-  most peaked, leaving uncertain positions for later steps, when more context
-  exists. "Easy tokens first" is the move AR structurally cannot make.
-- **Noisy confidence**: confidence plus annealed random noise
-  (MaskGIT-style), guarding against the rich-get-richer failure where early
-  confident commitments (whitespace, common tokens) drag the whole canvas
-  toward degenerate text.
+Given a step budget, which masked positions get filled this step? The theory's
+default is uninformative, and the improvements are where practice lives:
+
+- **Random order** unmasks a random subset each step, following the schedule.
+  This is what the raw ELBO samples, and it wastes the model's own
+  information: at any step, some masked positions have sharply peaked
+  predictive distributions (the model is sure) and others are flat (it is
+  guessing).
+- **Confidence order** commits the positions with the most peaked
+  predictions, leaving uncertain ones for later steps, when more context has
+  been filled in. "Easy tokens first" is a move AR structurally cannot make,
+  because its order is fixed. On the measured curves below, confidence
+  ordering beats random by roughly 7x in generative perplexity at high NFE.
+- **Noisy confidence** adds annealed random noise to the confidence scores
+  (MaskGIT-style) before ranking. The guard matters because pure confidence
+  ordering has a rich-get-richer failure: early confident commitments (in
+  our character model, whitespace) reshape the canvas so that similar tokens
+  become the confident choice everywhere, and the decode collapses toward
+  degenerate text. We met this failure honestly while building the site, of
+  which more below.
+- **Semi-autoregressive block schedules** commit left-to-right in chunks,
+  running diffusion within each chunk. This decoding *policy* on a
+  full-canvas model is one of three distinct things "block diffusion" can
+  mean, and teasing them apart is chapter 5's job.
+
+And the move none of them have: **remasking**. A position committed early can
+be re-masked if later commitments make it look wrong, then re-predicted.
+LLaDA ships low-confidence remasking at inference<Ref k="nie2025large" />; no
+AR analogue exists, since AR's pen cannot be lifted. Remasking is also, as
+chapter 9 argues, the one genuinely new *defensive* affordance dLLMs bring to
+safety.
 
 ## The measured trade
 
 <NfeExplorer client:visible />
 
-Three lessons, all visible in the data. First, **NFE 1 is the multimodality
-problem in one number**: every position sampled independently gives generative
-perplexity in the thousands. Second, quality improves monotonically with
-steps, and confidence-based ordering beats random by roughly 7x at high NFE.
-Third, the latency panel shows the honest serving picture: this cache-free
-dLLM undercuts its AR twin's sequential sampling only below a crossover NFE
-(128 on this hardware), because each diffusion step is a full pass over all
-positions while the AR twin re-reads only one new token per step. Chapter 7
-turns that observation into arithmetic.
+Read the two panels together and three lessons fall out.
+
+**NFE 1 is the multimodality problem in one number.** Every position sampled
+independently in a single pass gives generative perplexity in the thousands:
+chapter 3's 2018 failure, reproduced on demand. Coherence is bought with
+iterations because each step conditions on the joint structure the previous
+steps committed.
+
+**Policy dominates at every budget.** The gap between confidence-guided and
+random ordering is not a refinement; it is multiples. Decoding research is
+not garnish on dLLMs, it is where much of the quality lives.
+
+**The latency panel is the honest serving picture.** This cache-free dLLM
+undercuts its AR twin's sequential sampling only below a crossover NFE (128
+on this hardware), because each diffusion step is a full pass over all
+positions while the cached AR step touches one new token. "Diffusion is
+parallel, therefore faster" is not automatic; it is an engineering claim that
+holds at the right operating point. Chapter 7 turns this into arithmetic and
+surveys the cache retrofits that move the crossover.
 
 <Callout kind="keyidea">
-Decoding a dLLM is a two-dimensional choice: **how many steps** (the
-compute-quality dial) and **in what order** (the policy). Neither exists for
-AR. Deployed dLLMs sit at an adaptive interior point: they commit a handful of
-confident tokens per step, behaving semi-autoregressively in practice, so the
-theoretical any-order freedom is mostly held in reserve rather than exercised.
+Decoding a dLLM is a two-dimensional choice AR never gets to make: **how many
+steps** (the compute-quality dial) and **in what order** (the policy).
+Everything on this page generalizes: production systems tune both dials, add
+confidence thresholds that adapt the number of commitments per step, and
+increasingly restore block structure for caching. One humbling empirical
+note: at deployment, confidence-based decoding mostly commits tokens adjacent
+to already-revealed context, so deployed dLLMs behave semi-autoregressively,
+and the theoretical any-order freedom is largely held in reserve.
 </Callout>
 
-## Revision: the move AR cannot make
+## A debugging story you should steal
 
-A position committed early can be **re-masked** if later commitments make it
-look wrong, then re-predicted. LLaDA uses low-confidence remasking at
-inference<Ref k="nie2025large" />; no AR analogue exists, since AR's pen
-cannot be lifted. Remasking is also, as chapter 8 argues, the one genuinely
-new *defensive* affordance dLLMs bring to safety.
+While building this site's model, our first checkpoint produced a paradox:
+under confidence ordering, quality got *worse* as NFE increased, the opposite
+of everything above. The canvas collapsed to near-blank text, and more steps
+meant deeper collapse. It would have been easy to blame the sampler and start
+tuning it. The actual cause was upstream: the checkpoint had stalled at the
+unigram level during training (a variance pathology of the $1/t$-weighted
+objective at small batch sizes; chapter 2), so "most confident" meant
+"whitespace, everywhere". The healthy retrained model shows textbook behavior
+under the *same* sampler.
 
 <Callout kind="caveat">
-A decoding pathology can be a training pathology in the sampler's clothes.
-While building this site's model, an early undertrained checkpoint collapsed
-to near-blank text under confidence ordering, and quality *worsened* with more
-steps; the healthy retrained model shows none of this. If your dLLM decodes
-badly, diagnose the model before redesigning the decoder. The judge-gaming
-toggle above carries the matching evaluation warning: generative perplexity
-alone rewards low-entropy samplers, so it must never be reported without a
-diversity measure.
+A decoding pathology can be a training pathology wearing the sampler's
+clothes: diagnose the model before redesigning the decoder. And carry the
+matching evaluation warning, visible in the widget's toggle above: the AR
+judge scores its *own* samples (2.8) as more probable than genuine held-out
+Shakespeare (5.5). Generative perplexity rewards low-entropy samplers, so it
+must never be reported without a diversity measure. Chapter 7 promotes both
+warnings into a checklist.
 </Callout>
+
+<GoDeeper items={[
+  'Section 15 (Inference and Decoding): NFE, confidence unmasking, remasking, and evaluation metrics with their pitfalls',
+  'Appendix H (Build One): the tiny model, the training pathology, the collapse, and every number on this page with its generation script',
+  'Section 16 (Serving): the systems treatment this page previews',
+]} />
 
 <RefList />

@@ -10,6 +10,7 @@ export default defineConfig({
   base: '/all-about-dllms',
   integrations: [svelte(), mdx()],
   markdown: {
+    smartypants: false, // never auto-produce em-dashes
     remarkPlugins: [remarkMath],
     rehypePlugins: [rehypeKatex],
   },

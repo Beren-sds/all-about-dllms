@@ -49,16 +49,22 @@ export const chapters: Chapter[] = [
     hook: 'Scaling laws, RL on a bound, and the serving arithmetic that decides whether diffusion is actually faster.',
   },
   {
-    slug: '8-safety',
+    slug: '8-applications',
     n: 8,
+    title: 'Where dLLMs Earn Their Keep',
+    hook: 'Code, proteins, and pixels adopt dLLMs where an AR weakness is structural to the domain, plus what remains unsolved.',
+  },
+  {
+    slug: '9-safety',
+    n: 9,
     title: 'Safety When Decoding Is Parallel',
     hook: 'Every dLLM capability has a safety dual. Mask-infilling attacks exploit exactly what makes dLLMs good.',
   },
   {
-    slug: '9-cheat-sheet',
-    n: 9,
+    slug: '10-cheat-sheet',
+    n: 10,
     title: 'The Cheat Sheet',
-    hook: 'Twelve numbers, one decision helper, and where to go deeper.',
+    hook: 'Twelve numbers, five equations, one decision helper, and where to go deeper.',
   },
 ];
 

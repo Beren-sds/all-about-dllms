@@ -1,0 +1,130 @@
+---
+layout: ../layouts/Base.astro
+title: Safety When Decoding Is Parallel
+slug: 9-safety
+description: Alignment as deployed is a property of left-to-right generation; mask-infilling attacks exploit exactly what makes dLLMs good, and revision is the one new defense.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
+
+# Safety When Decoding Is Parallel
+
+Alignment, as deployed, is a property of left-to-right generation more than
+its practitioners tend to state. A refusal is a **prefix**: the model decides
+early, emits "I can't help with that," and every later token conditions on
+having refused. Moderation pipelines assume the same geometry: score the
+response as it streams, cut it off early if it turns harmful. Jailbreak
+research and its defenses grew up inside those assumptions too.
+
+A masked dLLM voids the assumptions wholesale. There is no privileged early
+position where refusal happens, because generation does not start at the
+beginning. There is no stream to score, because many positions commit per
+step across the whole canvas. And there is a new input modality with no AR
+analogue at all: the prompt itself can contain *mask tokens* for the model to
+fill.
+
+## The mask-infilling attack, step by step
+
+The first dedicated attack, DIJA, constructs **interleaved mask-text
+prompts**: the harmful request is partially written out, with the dangerous
+specifics left as literal mask tokens<Ref k="wen2025devil" />. Walk the
+mechanism, because each step exploits a capability earlier chapters praised:
+
+1. **The prompt arrives as a scaffold, not a question.** The model is never
+   asked to *begin* a response, which is where refusals live. It is asked to
+   complete gaps inside text that already exists. Refusal, as learned, is a
+   response-initial behavior; there is no response-initial position here.
+2. **Bidirectional consistency does the work.** In the authors' mechanism
+   analysis, "bidirectional modeling drives the model to produce contextually
+   consistent outputs for masked spans, even when harmful". The infilling
+   pressure that makes a dLLM a great code editor (chapter 8) presses it to
+   complete a harmful scaffold coherently. Context on both sides is not just
+   available; the training objective *rewards* consistency with it.
+3. **Parallel commitment removes the checkpoint.** "Parallel decoding limits
+   model dynamic filtering and rejection sampling of unsafe content". By the
+   time any stream-based monitor could react, the harmful span exists on the
+   canvas, possibly materialized mid-sequence at step 3 of 32.
+
+The reported numbers are not marginal: up to **100% keyword-based attack
+success on Dream-Instruct**, gains over the strongest prior jailbreak
+baseline (ReNeLLM) of up to **78.5 percentage points** in evaluator-based
+success on JailbreakBench, and a **37.7-point** StrongREJECT increase. The
+paper was accepted at ICLR 2026, so the finding has cleared peer review, not
+just arXiv.
+
+## Why AR-inherited alignment transfers poorly
+
+Nothing in the standard alignment pipeline targets this surface, and the gaps
+are structural rather than oversights:
+
+- **SFT refusals are learned as response-initial patterns.** An infilling
+  query never asks the model to begin a response, so the learned behavior
+  simply has no trigger site.
+- **Preference optimization on a dLLM already fights estimator variance**
+  (chapter 7) before any safety-specific difficulty enters. Safety-relevant
+  preference gradients inherit the same noisy-bound problem as everything
+  else.
+- **Streaming moderation has no purchase on a canvas.** Early termination
+  assumes harm arrives in reading order. On a canvas, the harmful span can
+  appear anywhere, at any step, and be locally fluent by construction.
+- In the atlas's terms (chapter 6): alignment techniques were fitted to one
+  **decoding policy**, sequential and prefix-first, and are being deployed on
+  machines whose policy axis moved.
+
+<Callout kind="keyidea">
+**Every dLLM capability has a safety dual.** Bidirectional infilling, the
+code feature, is scaffold-completion pressure, the attack. Parallel decoding,
+the latency feature, removes sequential refusal checkpoints, the broken
+defense. Revision, the quality feature, is the one genuinely new *defensive*
+affordance on the table: a canvas-level monitor can in principle re-mask a
+harmful span before finalization, retracting rather than merely truncating,
+an option AR streaming never had. Safety work that treats a dLLM as "an LLM
+with a different sampler" will keep being surprised; the attack surface is
+the taxonomy of chapter 6, read adversarially.
+</Callout>
+
+## Defense directions, honestly labeled
+
+Published defenses are thin as of 2026, so what follows are directions with
+mechanisms, not results, and each is marked open:
+
+- **Canvas-level moderation**: score the full canvas per denoising step
+  rather than a stream per token. The revision property means a flagged span
+  can be re-masked and re-solved under constraints rather than the generation
+  merely being killed. Cost model unmeasured in public work.
+- **Infilling-aware alignment**: include interleaved mask-text formats in
+  safety tuning, so refusal is learned as a property of *completions*, not
+  prefixes. No published at-scale recipe yet.
+- **Decode-time monitors**: the model's own confidence profile and
+  unmasking-order dynamics are observable signals with no AR analogue.
+  Whether they carry safety-relevant information is an open empirical
+  question.
+
+## How to evaluate claims in this space
+
+Chapter 7's rules apply with extra force. Keyword-based attack-success rates
+flatter attacks (the 100% above is keyword-based; evaluator-based numbers run
+lower). Defense papers evaluated only against prefix-style prompts say
+nothing about infilling attacks. And any safety comparison across paradigms
+inherits every operating-point pitfall from chapter 7, plus one more: the
+decoding policy is now part of the threat model, so "the same model" under a
+different unmasking schedule is a different attack surface.
+
+<Callout kind="caveat">
+This chapter leans on a young literature: one flagship attack paper, its own
+metrics, and no published at-scale defenses to weigh against it. Commercial
+systems disclose little about their safety stacks, so the public picture may
+understate deployed defenses. What is robust is the structural analysis: the
+assumptions alignment inherited from AR decoding demonstrably do not all
+survive the move to parallel generation, and the field noticed only in 2025.
+</Callout>
+
+<GoDeeper items={[
+  'Section 26 (Safety): the full mechanism analysis and the defense-directions discussion',
+  'Section 27 (Open Problems): alignment on a bound and dLLM-native safety as named problems with resolution criteria',
+]} />
+
+<RefList />

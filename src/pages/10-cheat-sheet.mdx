@@ -1,0 +1,121 @@
+---
+layout: ../layouts/Base.astro
+title: The Cheat Sheet
+slug: 10-cheat-sheet
+description: Twelve numbers, five equations, a glossary, one decision helper, and the annotated map for going deeper.
+---
+
+import Callout from '../components/Callout.astro';
+import RefList from '../components/RefList.astro';
+import Numbers from '../components/Numbers.astro';
+
+# The Cheat Sheet
+
+Everything on this site, compressed for retrieval.
+
+## The anchor
+
+*Generative sequence modelling is repeatedly predicting clean tokens from a
+corrupted context. AR and diffusion differ only in the corruption process and
+the decoding order.*
+
+## The five equations
+
+The AR factorization, exact by the chain rule:
+
+$$
+p(\mathbf{x}) = \prod_{i=1}^{L} p\left(x_i \mid x_{<i}\right)
+$$
+
+The masked forward process (linear schedule) and its objective, the weighted
+masked cross-entropy that upper-bounds negative log-likelihood:
+
+$$
+\mathcal{L} = \mathbb{E}_{t}\, w(t)\,
+\mathbb{E}_{q}\!\!\sum_{i:\ x_t^i = \texttt{[M]}} -\log p_\theta\!\left(x_0^i \mid \mathbf{x}_t\right),
+\qquad w(t) = \tfrac{1}{t}
+$$
+
+The any-order identity, the deepest fact in the subject:
+
+$$
+\mathcal{L} = \mathbb{E}_{\sigma}\sum_{i}
+-\log p_\theta\!\left(x_0^{\sigma(i)} \mid x_0^{\sigma(<i)}\right)
+$$
+
+The block bound, exact across blocks, bound within, AR at $B{=}1$:
+
+$$
+\log p_\theta(\mathbf{x}) \ge \sum_{b} -\mathcal{L}_{\text{masked}}\!\left(\mathbf{x}^{(b)} \mid \mathbf{x}^{(<b)}\right)
+$$
+
+Conditional flow matching, the formalism that contains all of it (discrete
+case: velocity becomes a CTMC rate matrix; mask source recovers masked
+diffusion):
+
+$$
+\mathcal{L}_{\mathrm{CFM}} = \mathbb{E}\left\lVert v_\theta(\mathbf{x}_t, t) - u_t(\mathbf{x}_t \mid \mathbf{x}_1) \right\rVert^2
+$$
+
+## The four axes
+
+**State space** (absorbing / uniform / continuous) · **granularity** (canvas /
+blocks) · **provenance** (scratch / adapted) · **decoding policy** (random /
+confidence / semi-AR / distilled). Cache, length cap, and likelihood tightness
+are consequences of granularity; self-correction of state space plus policy;
+training cost of provenance.
+
+## Decide in one breath
+
+Exact likelihood or long cached context → **AR**. Infilling or bidirectional
+structure → **masked**. Serving speed or unbounded length → **block**. Small
+budget → **adapt**. Gradient steering → **continuous**. Few-step sampling →
+**uniform, distilled**. Likelihood with parallelism → **hybrid**.
+
+## Twelve numbers to remember
+
+<Numbers />
+
+## Glossary, ten terms
+
+**NFE**: number of function evaluations, the denoising step count $N$; the
+compute-quality dial. **NELBO**: negative evidence lower bound; what a dLLM
+reports instead of an exact NLL, always an upper bound. **Absorbing kernel**:
+corruption where tokens become `[M]` and stay there; makes corruption
+observable. **Any-order AR**: the identity showing masked diffusion equals AR
+averaged over generation orders. **Canvas**: the fixed-length sequence a
+full-granularity dLLM denoises. **Block-causal attention**: bidirectional
+within a block, causal across blocks; what makes the block cache exact.
+**Confidence unmasking**: committing the most peaked predictions first.
+**Remasking**: re-corrupting a committed token to revise it; no AR analogue.
+**Generative perplexity**: sample quality scored by a judge LM; gameable by
+low-entropy samplers, never report alone. **Multimodality problem**: the
+within-step independence error, named in 2018, visible at NFE 1.
+
+<Callout kind="keyidea">
+One sentence per chapter. (1) Corruption and order are the only two
+differences. (2) The objective is weighted fill-in-the-blanks, equal to
+any-order AR, trained by a Transformer minus one mask. (3) The decoder
+existed in 2019; diffusion added the warrant; flow matching re-derived it and
+owns the language of new designs. (4) Steps and order are dials with measured
+trade-offs and measurable failure modes. (5) AR and diffusion are endpoints
+of a block-size dial, and the commercial systems live on it. (6) Four axes
+classify every model; the frontier mixes families. (7) Scaling taxes
+diffusion by a constant, data scarcity flips the sign, post-training fights a
+missing exact likelihood, and six rules keep comparisons honest. (8)
+Applications sort by which AR commitment the domain violates. (9) Every
+capability has a safety dual, and revision is the new defense. (10) You are
+reading it.
+</Callout>
+
+## Going deeper
+
+The long-form companion, *The Past and Present of Text Diffusion Models*
+(90-page PDF), carries the full derivation chain (DDPM ELBO, D3PM, score
+entropy, masked NELBO, flow matching), 26 exercises with solutions, the
+trainable 1.85M-parameter model behind this site's widgets with its complete
+debugging story, and the annotated bibliography. The per-page reference lists
+across chapters 1 through 9 link every claim on this site to its arXiv
+source.
+
+<RefList />

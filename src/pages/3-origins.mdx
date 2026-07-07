@@ -2,85 +2,171 @@
 layout: ../layouts/Base.astro
 title: Where dLLMs Came From
 slug: 3-origins
-description: Parallel decoding existed by 2019. Diffusion supplied the missing theory, and flow matching re-derived the same endpoint from another direction.
+description: Parallel decoding existed by 2019 without a theory; diffusion supplied the warrant; flow matching re-derived the same endpoint and now owns the language new designs are written in.
 ---
 
 import Callout from '../components/Callout.astro';
 import Ref from '../components/Ref.astro';
 import RefList from '../components/RefList.astro';
+import GoDeeper from '../components/GoDeeper.astro';
 import Timeline from '../components/Timeline.astro';
 
 # Where dLLMs Came From
 
-The intellectual history of dLLMs is usually told as "image diffusion, then
-text diffusion." That telling skips the most interesting part: text generation
+The history of dLLMs is usually told as "image diffusion, then text
+diffusion." That telling skips the most interesting part: text generation
 attacked the autoregressive bottleneck *before* diffusion arrived, invented
-most of the decoder, and then stalled for lack of a theory.
+most of the decoder, and then stalled for lack of a theory. Reading the
+prehistory pays twice: it assigns credit honestly, and it names the failure
+mode that still governs every parallel decoder built since.
 
 <Timeline />
 
-## The prehistory: everything but the warrant (2018-2019)
+## 2018: one parallel pass, and the multimodality problem
 
-Non-autoregressive machine translation<Ref k="gu2018nonautoregressive" />
-generated every output token simultaneously in one pass, an order of magnitude
-faster, and immediately hit the wall it named the **multimodality problem**:
-sampling positions independently mixes fragments of incompatible answers. That
-failure still governs every parallel decoder built since; it is what you see
-at NFE 1 in this site's playground.
+The first break with left-to-right decoding was total. Non-autoregressive
+machine translation (NAT)<Ref k="gu2018nonautoregressive" /> generated every
+target token *simultaneously*, in a single forward pass, assuming outputs
+conditionally independent given the source. The latency win was an order of
+magnitude. The cost was a failure the authors named: conditional independence
+"prevents a model from properly capturing the highly multimodal distribution
+of target translations", the **multimodality problem**. A German sentence
+admits two good English translations; a model sampling each position
+independently happily produces the first half of one stitched to the second
+half of the other.
 
-Iteration was the obvious fix, and the pieces landed fast. Lee et
-al.<Ref k="lee2018deterministic" /> framed iterative refinement explicitly as
-learning a *conditional denoising autoencoder*, the score connection written
-down for text in 2018. Then Mask-Predict<Ref k="ghazvininejad2019maskpredict" />
-assembled what is recognizably the modern dLLM decoder: train a masked
-language model on the target, decode by predicting all positions in parallel,
-then repeatedly re-mask and re-predict the tokens the model is *least
-confident* about, for a constant number of iterations. All-mask start,
-parallel prediction, confidence-ranked commitment, fixed step budget: 2019.
+NAT shipped two patches that outlived it. *Fertility latent variables* gave
+the parallel decoder some coordination, and *sequence-level knowledge
+distillation*, training the parallel student on an AR teacher's greedy
+outputs, thinned the target distribution toward something closer to unimodal.
+Distillation-to-tame-multimodality returns in modern few-step samplers, and
+the multimodality problem itself is, in modern language, the **within-step
+independence error** of diffusion decoding: every dLLM that commits several
+tokens in one step samples them independently given the canvas, exactly NAT's
+assumption, locally in time. You will meet it as a measured number in chapter
+4 (generative perplexity in the thousands at one step) and as the central
+serving trade-off in chapter 7.
 
-In the same year, XLNet<Ref k="yang2019xlnet" /> trained on expected
-likelihood over *all permutations of the factorization order* (the any-order
-objective, used for representation learning rather than generation), Wang and
-Cho sampled text from BERT itself<Ref k="wang2019bert" />, and the Insertion
-and Levenshtein Transformers<Ref k="stern2019insertion" /><Ref k="gu2019levenshtein" />
-generated text through insert and delete operations, reaching a length-$n$
-sequence in $\lfloor \log_2 n \rfloor + 1$ insertion rounds.
+## 2018-2019: iterate, mask the doubtful, predict again
+
+The single-pass failure suggested iteration, and the pieces landed with
+startling completeness.
+
+**Refinement as denoising.** Lee, Mansimov, and Cho generated a rough parallel
+draft and repeatedly refined it, designing the model explicitly on "the
+principles of latent variable models and denoising autoencoders" and observing
+that the refiner "could instead be viewed as learning a conditional denoising
+autoencoder which is known to capture the gradient of the
+log-density"<Ref k="lee2018deterministic" />. That is the score-matching
+connection, written down for text in 2018, before score-based generative
+modelling reached language.
+
+**Mask-Predict.** Ghazvininejad and colleagues then assembled what is
+recognizably the modern dLLM decoder<Ref k="ghazvininejad2019maskpredict" />:
+train a conditional *masked language model* to predict any subset of masked
+target tokens; decode by starting from an all-masked target, predicting every
+position in parallel, then, for a constant number of iterations, re-masking
+and re-predicting the tokens the model is *least confident* about. Hold that
+against chapter 4's playground: all-mask initialization, parallel prediction,
+confidence-ranked commitment, low-confidence re-masking, fixed step budget.
+Every component is present in 2019. What Mask-Predict lacked was not mechanism
+but *justification*: the objective was a heuristic with no likelihood
+interpretation, the iteration count a hyperparameter with no probabilistic
+meaning, and the method conditional (translation) rather than a language
+model.
+
+**Any-order training and edit operations.** In the same year,
+XLNet<Ref k="yang2019xlnet" /> pretrained by maximizing "the expected
+likelihood over all permutations of the factorization order", which is, up to
+the time reparameterization of chapter 2, the masked-diffusion objective
+written six years early (XLNet used it for representation learning and never
+decoded in parallel). Wang and Cho read BERT itself as a Markov random field
+and sampled from it by Gibbs iteration, the first attempt to make a masked LM
+speak<Ref k="wang2019bert" />. And the Insertion and Levenshtein
+Transformers<Ref k="stern2019insertion" /><Ref k="gu2019levenshtein" />
+replaced position-wise prediction with *edit operations*, insertion, and
+insertion-plus-deletion, buying flexible orders, dynamic length change, and
+logarithmic-depth generation: a balanced insertion tree emits a length-$n$
+sequence in $\lfloor \log_2 n \rfloor + 1$ rounds.
 
 <Callout kind="keyidea">
 By the end of 2019, text generation had parallel prediction, confidence-based
-re-masking, any-order objectives, and edit-based decoding, everything a modern
+re-masking, any-order objectives, and edit-based decoding: everything a modern
 masked dLLM **does**. What it did not have was a reason to believe any of it:
 no likelihood bound, no principled mask schedule, no account of what the
-iteration converges to. Diffusion's contribution to text was the *warrant*:
-D3PM gave the masked LM a generative model and an ELBO<Ref k="austin2021structured" />,
-the masked NELBO gave the mask-ratio curriculum a derivation<Ref k="sahoo2024simple" />,
-and the any-order identity gave XLNet's objective a decoder<Ref k="ou2024absorbing" />.
+iteration converges to, and a known unsolved failure (multimodality) at its
+heart. Diffusion's contribution to text was the *warrant*. D3PM gave the
+masked LM a generative model and an ELBO<Ref k="austin2021structured" />; the
+masked NELBO gave the mask-ratio curriculum a derivation<Ref k="sahoo2024simple" />;
+the any-order identity gave XLNet's objective a decoder<Ref k="ou2024absorbing" />.
+The machinery was prehistoric; the warrant is what made billion-scale
+training investable.
 </Callout>
 
-## The diffusion road (2020-2024)
+## 2020-2024: the diffusion road
 
-The continuous machinery arrived with DDPM<Ref k="ho2020denoising" />, crossed
-to discrete data with D3PM's transition-matrix formulation<Ref k="austin2021structured" />,
-was pushed to GPT-2-level perplexity by score entropy (SEDD)<Ref k="lou2023discrete" />,
-and finally collapsed to the weighted cross-entropy of chapter 2 by the masked
-diffusion papers<Ref k="sahoo2024simple" /><Ref k="shi2024simplified" />. A
-parallel continuous-state route (Diffusion-LM's embeddings, SSD-LM's
-simplex<Ref k="li2022diffusionlm" /><Ref k="han2022ssdlm" />) pioneered
-gradient-based controllability and block decoding, and survives today in the
-niches where those matter.
+The continuous machinery arrived with DDPM's variational bound and noise
+prediction<Ref k="ho2020denoising" />. Crossing to text split into two routes.
 
-## The other road: flow matching (2022-)
+**The continuous route** kept Gaussian noise by moving text into a continuous
+carrier: Diffusion-LM diffused token *embeddings* and demonstrated
+plug-and-play controllable generation, gradient guidance steering text
+through classifier gradients<Ref k="li2022diffusionlm" />; SSD-LM diffused on
+the vocabulary *simplex* and already decoded semi-autoregressively in blocks
+of 25<Ref k="han2022ssdlm" />. The route's tax is the **rounding leak**:
+continuous vectors must be rounded back to tokens, and probability mass falls
+between the tokens. It survives today where its unique asset, native gradient
+steering, is the point (chapter 6).
+
+**The native discrete route** defined corruption directly on tokens. D3PM
+supplied transition-matrix corruption and the BERT
+connection<Ref k="austin2021structured" />; SEDD's score-entropy training
+brought discrete diffusion to GPT-2-level perplexity and made the field take
+notice<Ref k="lou2023discrete" />; and in 2024 the masked-diffusion papers
+collapsed the whole apparatus to the weighted cross-entropy of chapter
+2<Ref k="sahoo2024simple" /><Ref k="shi2024simplified" />, with RADD proving
+time-independence and the any-order identity<Ref k="ou2024absorbing" />. From
+there, scale: LLaDA and Dream at 7-8B in 2025 (chapter 6).
+
+## 2022-: the other road, flow matching
 
 Just as masked diffusion consolidated, a second formalism re-derived it from
-different primitives. Flow matching<Ref k="lipman2023flow" /> replaces "invert
-a fixed corruption" with "**choose** a path from noise to data, then regress
-its velocity"; diffusion paths are one choice, straight paths a better one in
-continuous spaces<Ref k="liu2023rectified" />. On discrete state spaces the
-velocity becomes the rate matrix of a continuous-time Markov chain, and the
-resulting Discrete Flow Models provably *contain* discrete diffusion as a
-special case<Ref k="campbell2024generative" />. Choosing the source
-distribution to be a point mass on `[M]` recovers exactly the masked model of
-chapter 2, learned posterior time-independence included<Ref k="gat2024discrete" />.
+different primitives, and it is worth understanding because new designs are
+increasingly written in its language.
+
+Flow matching<Ref k="lipman2023flow" /> replaces "invert a fixed corruption"
+with "**choose** a path from noise to data, then regress its velocity". A
+network $v_\theta(\mathbf{x}, t)$ is trained by the conditional flow-matching
+objective, a plain regression onto the velocity of a *conditional* path whose
+gradients provably equal those of the intractable marginal objective:
+
+$$
+\mathcal{L}_{\mathrm{CFM}} = \mathbb{E}_{t,\, \mathbf{x}_1,\, \mathbf{x}_t}
+\left\lVert v_\theta(\mathbf{x}_t, t) - u_t(\mathbf{x}_t \mid \mathbf{x}_1) \right\rVert^2 .
+$$
+
+Diffusion paths are one instance; *straight* paths, whose conditional velocity
+is the constant displacement $\mathbf{x}_1 - \mathbf{x}_0$, are a better
+default in continuous spaces because straightness is exactly what few-step
+solvers need<Ref k="liu2023rectified" />.
+
+On discrete state spaces there are no derivatives, but there is a substitute:
+the velocity becomes the **rate matrix of a continuous-time Markov chain**.
+Discrete Flow Models built the correspondence and proved the containment: the
+framework "includes discrete diffusion models as a specific
+instance"<Ref k="campbell2024generative" />, with a genuinely new capability
+on top, rate matrices chosen *at sampling time* without retraining. Discrete
+Flow Matching then supplied general mixture paths, per-position interpolants
+
+$$
+p_t\!\left(x^i \mid x_1^i\right) = (1-\kappa_t)\, p_{\mathrm{source}}\!\left(x^i\right) + \kappa_t\, \delta_{x_1^i}\!\left(x^i\right),
+$$
+
+and scaled the recipe to 1.7B parameters on code and
+text<Ref k="gat2024discrete" />. Set the source to a point mass on `[M]` and
+the mixture path *is* the absorbing marginal of chapter 2, learned-posterior
+time-independence included: two independently developed formalisms arriving at
+the same trained object for the mask path.
 
 | | Continuous FM | Discrete FM | Masked diffusion |
 |---|---|---|---|
@@ -90,22 +176,32 @@ chapter 2, learned posterior time-independence included<Ref k="gat2024discrete" 
 | Loss | velocity regression | weighted cross-entropy | weighted cross-entropy |
 | Sampler freedom | solver choice | rate-matrix choice, post hoc | unmasking order only |
 
-Two independently developed formalisms arriving at the same trained object for
-the mask path is the strongest evidence that the masked dLLM is a natural
-point in design space rather than a historical accident. And the flow view is
-already paying rent: edit operations returned with a proper generative
-semantics (Edit Flows<Ref k="havasi2025edit" />, closing the loop to the
-Levenshtein Transformer), and kinetic-optimality analysis explains why
-mixture/mask-like paths keep winning<Ref k="shaul2025flow" />.
+The flow view is already paying rent beyond notation. Kinetic-optimality
+analysis decouples path from velocity and shows mixture (mask-like) paths
+optimize the symmetric kinetic energy, a principled account of why the mask
+construction keeps winning<Ref k="shaul2025flow" />. And Edit Flows define the
+CTMC over *sequences* with insertions, deletions, and substitutions as the
+jump events<Ref k="havasi2025edit" />: variable-length generation at the
+process level, and the Levenshtein Transformer's edit operations returning
+with a generative semantics, closing a loop the prehistory opened.
 
 <Callout kind="caveat">
-This tidy narrative takes a side in a genuinely contested credit assignment.
-The MT prehistory worked on *conditional* generation where multimodality is
-mild; whether its recipes could have scaled to open-ended language modelling
-without diffusion's schedule theory and likelihood story is untestable. And
-formalism containment is not benchmark dominance: as of 2026 the strongest
-trained artifacts still sit at the mask corner, with the largest published
-discrete-flow-matching LM at 1.7B parameters<Ref k="gat2024discrete" />.
+Two honest limits on this chapter's tidy arcs. First, the credit assignment
+is genuinely contested: the MT prehistory worked on *conditional* generation
+where multimodality is mild, and whether its recipes could have scaled to
+open-ended language modelling without diffusion's schedule theory is
+untestable; this telling takes a side. Second, formalism containment is not
+benchmark dominance: the strongest trained artifacts as of 2026 still sit at
+the mask corner, the largest published discrete-flow-matching LM is 1.7B
+parameters with code scores far below commercial systems, and "FM won the
+language new designs are written in" is a claim about papers, not products.
 </Callout>
+
+<GoDeeper items={[
+  'Section 6 (Before Diffusion): the prehistory with verbatim quotes and the full credit-assignment discussion',
+  'Section 5 (Flow Matching): CNFs, the CFM gradient-equality proof, straight paths, with figures',
+  'Section 11 (Discrete Flow Matching): rate matrices, mixture paths, kinetic optimality, Edit Flows, and the correspondence table in full',
+  'Sections 7-9: Diffusion-LM, D3PM, and SEDD, each introduced by breaking the tool before it',
+]} />
 
 <RefList />
