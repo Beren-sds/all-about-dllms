@@ -1,0 +1,16 @@
+---
+interface Props {
+  kind: 'keyidea' | 'intuition' | 'caveat';
+}
+const { kind } = Astro.props;
+const titles: Record<string, string> = {
+  keyidea: 'KEY IDEA',
+  intuition: 'INTUITION',
+  caveat: 'WHERE THIS MIGHT BE WRONG',
+};
+---
+
+<aside class={`callout ${kind}`}>
+  <div class="callout-title">{titles[kind]}</div>
+  <div class="callout-body"><slot /></div>
+</aside>
