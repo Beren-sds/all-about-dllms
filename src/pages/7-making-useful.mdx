@@ -1,0 +1,96 @@
+---
+layout: ../layouts/Base.astro
+title: Making dLLMs Useful
+slug: 7-making-useful
+description: Scaling laws with a crossover, post-training on a bound, and the serving arithmetic that decides whether diffusion is actually faster.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+import BreakEvenCalc from '../components/widgets/BreakEvenCalc.svelte';
+
+# Making dLLMs Useful
+
+A pretrained base model is not a product. This chapter covers the three
+practical questions: does the paradigm scale, can it be aligned and taught to
+reason, and can it be served.
+
+## Scaling: same exponent, constant tax, and a crossover
+
+The first scaling law for masked diffusion models finds a scaling *rate*
+comparable to AR with a "relatively small compute gap", a constant-factor tax
+paid for training on all orders<Ref k="nie2024scaling" />. The same study
+shows what the tax buys: a 1.1B masked model breaks the reversal curse that
+much larger AR models fail (13B Llama-2, 175B GPT-3 included). One figure from
+this paper circulates garbled, so pin it down: the famous **16x is not the
+scaling-law gap**. It is a trade-off statement: an MDM given 16x the
+pretraining compute matches the AR baseline while sampling 1.4x faster than
+the KV-cache-accelerated ARM.
+
+The data axis flips the story. In data-constrained settings, masked diffusion
+"significantly outperforms AR models when compute is abundant but data is
+scarce": random masking implicitly trains over many token orderings, an
+implicit data augmentation that keeps extracting signal from repeated epochs
+long after AR saturates, with a closed-form critical compute threshold for the
+crossover<Ref k="prabhudesai2025diffusion" />. The frontier is marching toward
+exactly that regime, data-bound and compute-rich, which is the strongest
+structural argument that dLLMs are not a curiosity.
+
+## Post-training: everything is a variance dodge
+
+The AR post-training stack leans on one convenience at every stage: an exact,
+cheap $\log p_\theta(\mathbf{y} \mid \mathbf{x})$ per completion. A dLLM has
+only the ELBO, an expectation over mask patterns and noise levels, so every
+log-probability becomes a noisy estimate:
+
+- **SFT survives unchanged**: mask only the response, train the same loss.
+- **Preference optimization** needs the *difference* of two bounds; LLaDA 1.5
+  makes DPO-style training work by controlling the estimator's
+  variance<Ref k="zhu2025llada" />.
+- **RL for reasoning**: diffu-GRPO (the d1 recipe) integrates policy
+  gradients into masked dLLMs with a one-step log-probability estimate plus
+  fresh random prompt masking per update<Ref k="zhao2025d1" />; DiffuCoder's
+  coupled-GRPO evaluates completions under complementary mask draws, an
+  antithetic-sampling move worth +4.4% on EvalPlus<Ref k="gong2025diffucoder" />.
+- **Reasoning natively**: Diffusion-of-Thoughts lets the whole reasoning trace
+  sharpen jointly across denoising steps, trading compute for reasoning
+  quality through the NFE knob<Ref k="ye2024diffusion" />.
+
+<Callout kind="keyidea">
+Post-training a dLLM is one problem in three costumes: the exact sequence
+log-probability that SFT never needed, preference optimization needs as a
+difference, and RL needs per update, exists only as a noisy bound. Every 2025
+method is a point on the bias-variance-cost triangle. None of this machinery
+would exist if the model reported an exact likelihood, which is the deepest
+consequence of averaging over generation orders.
+</Callout>
+
+## Serving: caches and the price of independence
+
+Every dLLM cache relaxes AR's "provably unchanged" to "approximately stable",
+each with a different bet. dKV-Cache observes that a token's representations
+stabilize after it is decoded and caches them one step late, for 2-10x
+speedups<Ref k="ma2025dkv" />. Fast-dLLM caches block-wise with periodic
+refresh and adds confidence-aware parallel decoding, up to 27.6x end-to-end
+throughput<Ref k="wu2025fastdllm" />. BD3-LM and Eso-LM make caching *exact*
+by paying at training time<Ref k="arriola2025block" /><Ref k="sahoo2026esoteric" />.
+Under the caches sits one error source: tokens committed in the same step are
+sampled independently, the multimodality problem again, rationed by confidence
+thresholds rather than solved.
+
+The whole serving question compresses into arithmetic you can do on a napkin,
+or here:
+
+<BreakEvenCalc client:visible />
+
+<Callout kind="caveat">
+All post-training results in this chapter are 2025-vintage, single-team, and
+evaluated on small-to-mid benchmarks; none has the replication depth of the AR
+RLHF stack it imitates. Two named open risks: one-step log-probability
+estimates are biased with no published analysis of how the bias steers
+policies, and reward hacking through the decoder (a policy exploiting
+confidence-based unmasking order) appears unstudied.
+</Callout>
+
+<RefList />

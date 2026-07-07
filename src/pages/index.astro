@@ -1,7 +1,74 @@
 ---
-// placeholder; replaced by the hub page in a later task
+import Base from '../layouts/Base.astro';
+import DecodingPlayground from '../components/widgets/DecodingPlayground.svelte';
+import { chapters } from '../data/chapters';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
-<html lang="en">
-  <head><meta charset="utf-8" /><title>All You Need to Know About dLLMs</title></head>
-  <body><h1>All You Need to Know About dLLMs</h1></body>
-</html>
+
+<Base title="Home">
+  <section class="hero">
+    <h1>All You Need to Know About dLLMs</h1>
+    <p class="tag">
+      An interactive tutorial on diffusion language models: what they are, how
+      they decode, why they exist, and when to use one. Every number is cited,
+      and every animation is a real model decoding.
+    </p>
+    <p class="asof">As of July 2026</p>
+  </section>
+
+  <blockquote class="anchor">
+    Generative sequence modelling is <strong>repeatedly predicting clean tokens
+    from a corrupted context</strong>. Autoregression and diffusion differ only
+    in the corruption process and the decoding order. Nine chapters unpack that
+    sentence.
+  </blockquote>
+
+  <DecodingPlayground client:visible autoplay={true} compact={true} />
+
+  <h2>Chapters</h2>
+  <ul class="cards">
+    {chapters.map((c) => (
+      <li class="card">
+        <a href={`${base}/${c.slug}/`}>
+          <span class="n">CHAPTER {c.n}</span>
+          <h3>{c.title}</h3>
+          <p>{c.hook}</p>
+        </a>
+      </li>
+    ))}
+  </ul>
+
+  <h2>What this is, and is not</h2>
+  <p>
+    This site is the interactive companion to a 90-page tutorial,
+    <em>The Past and Present of Text Diffusion Models</em>, and curates its
+    dLLM story: the anchor idea, the masked objective, decoding, the
+    block dial, the family taxonomy, post-training, serving, and safety. The
+    heavy derivations (DDPM ELBO, score entropy, discrete flow matching's
+    velocity algebra) stay in the PDF, where they are done in full. The small
+    model whose decodes power the widgets here is 1.85M parameters, trained on
+    Shakespeare in minutes; its role is to make mechanisms observable, not to
+    demonstrate capability.
+  </p>
+</Base>
+
+<style>
+  .hero h1 {
+    font-size: 2.4rem;
+    background: linear-gradient(100deg, var(--hero-a), var(--hero-b) 55%, var(--hero-c));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 0.4rem;
+  }
+  .tag { font-size: 1.08rem; color: var(--gray); max-width: 38rem; }
+  .anchor {
+    margin: 1.8rem 0;
+    border-left: 4px solid var(--amber);
+    padding: 0.5rem 1.1rem;
+    font-size: 1.12rem;
+    background: #fdf9f1;
+    border-radius: 0 8px 8px 0;
+  }
+</style>

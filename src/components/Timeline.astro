@@ -1,0 +1,42 @@
+---
+// Static timeline rendered from timeline.json; four color-coded tracks.
+import data from '../data/timeline.json';
+
+const tracks = data.tracks as { id: string; name: string; color: string }[];
+const events = data.events as { year: number; track: string; label: string; blurb: string }[];
+const years = [...new Set(events.map((e) => e.year))].sort();
+const trackColor = Object.fromEntries(tracks.map((t) => [t.id, t.color]));
+---
+
+<figure class="tl wide">
+  <div class="legend">
+    {tracks.map((t) => (
+      <span><i style={`background:${t.color}`}></i>{t.name}</span>
+    ))}
+  </div>
+  <div class="years">
+    {years.map((y) => (
+      <div class="year">
+        <div class="yr">{y}</div>
+        {events.filter((e) => e.year === y).map((e) => (
+          <div class="ev" style={`border-color:${trackColor[e.track]}`}>
+            <b style={`color:${trackColor[e.track]}`}>{e.label}</b>
+            <span>{e.blurb}</span>
+          </div>
+        ))}
+      </div>
+    ))}
+  </div>
+</figure>
+
+<style>
+  .tl { margin: 1.6rem 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-family: var(--sans); font-size: 0.76rem; color: var(--gray); margin-bottom: 0.6rem; }
+  .legend i { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-right: 0.3rem; vertical-align: -1px; }
+  .years { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem; }
+  .year { flex: 1; min-width: 8.5rem; }
+  .yr { font-family: var(--sans); font-weight: 700; font-size: 0.8rem; color: var(--gray); border-top: 2px solid var(--rule); padding-top: 0.3rem; margin-bottom: 0.4rem; }
+  .ev { border-left: 3px solid; border-radius: 4px; background: #f8fafc; padding: 0.4rem 0.55rem; margin-bottom: 0.45rem; }
+  .ev b { display: block; font-family: var(--sans); font-size: 0.78rem; }
+  .ev span { font-size: 0.74rem; color: var(--gray); line-height: 1.4; display: block; }
+</style>

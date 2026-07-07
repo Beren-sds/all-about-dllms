@@ -1,0 +1,62 @@
+---
+layout: ../layouts/Base.astro
+title: The Cheat Sheet
+slug: 9-cheat-sheet
+description: Twelve numbers to remember, one decision helper, and the annotated map for going deeper.
+---
+
+import Callout from '../components/Callout.astro';
+import RefList from '../components/RefList.astro';
+import Numbers from '../components/Numbers.astro';
+
+# The Cheat Sheet
+
+Everything on this site, compressed for retrieval.
+
+## The anchor
+
+*Generative sequence modelling is repeatedly predicting clean tokens from a
+corrupted context. AR and diffusion differ only in the corruption process and
+the decoding order.*
+
+## The four axes
+
+**State space** (absorbing / uniform / continuous) · **granularity** (canvas /
+blocks) · **provenance** (scratch / adapted) · **decoding policy** (random /
+confidence / semi-AR / distilled). Cache, length cap, and likelihood tightness
+are consequences of granularity; self-correction of state space plus policy;
+training cost of provenance.
+
+## Decide in one breath
+
+Exact likelihood or long cached context → **AR**. Infilling or bidirectional
+structure → **masked**. Serving speed or unbounded length → **block**. Small
+budget → **adapt**. Gradient steering → **continuous**. Few-step sampling →
+**uniform, distilled**. Likelihood with parallelism → **hybrid**.
+
+## Twelve numbers to remember
+
+<Numbers />
+
+<Callout kind="keyidea">
+If you retain one sentence per chapter: (1) corruption and order are the only
+two differences; (2) the objective is weighted fill-in-the-blanks, equal to
+any-order AR; (3) the decoder existed in 2019, diffusion added the warrant,
+flow matching re-derived it; (4) steps and order are free parameters with
+measurable trade-offs; (5) AR and diffusion are endpoints of a block-size
+dial; (6) four axes classify every model, and the frontier mixes families;
+(7) scaling taxes diffusion by a constant but data scarcity flips the sign,
+and all post-training fights the same missing exact likelihood; (8) every
+capability has a safety dual; (9) you are reading it.
+</Callout>
+
+## Going deeper
+
+The long-form companion, *The Past and Present of Text Diffusion Models*
+(90-page PDF), carries the full derivation chain (DDPM ELBO, D3PM, score
+entropy, masked NELBO, flow matching), 26 exercises with solutions, the
+trainable 1.85M-parameter model behind this site's widgets, and the complete
+annotated bibliography. The per-page reference lists across chapters 1 through
+8 link every claim on this site to its arXiv source.
+
+<RefList />

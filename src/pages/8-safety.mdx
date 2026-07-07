@@ -1,0 +1,87 @@
+---
+layout: ../layouts/Base.astro
+title: Safety When Decoding Is Parallel
+slug: 8-safety
+description: Alignment as deployed is a property of left-to-right generation; mask-infilling attacks exploit exactly what makes dLLMs good.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+
+# Safety When Decoding Is Parallel
+
+Alignment, as deployed, is a property of left-to-right generation more than
+its practitioners tend to state. A refusal is a **prefix**: the model decides
+early, emits "I can't help with that," and every later token conditions on
+having refused. Moderation pipelines assume the same geometry, scoring a
+response as it streams and cutting it off early. A masked dLLM voids both
+assumptions at once: there is no privileged early position where refusal
+happens, and there is no stream, because many positions commit per step.
+
+## The mask-infilling attack, step by step
+
+The first dedicated attack, DIJA<Ref k="wen2025devil" />, constructs
+*interleaved mask-text prompts*: the harmful request is partially written out,
+with the dangerous specifics left as literal mask tokens for the model to
+fill.
+
+1. **The prompt arrives as a scaffold.** The model is not asked to *begin* a
+   response (where refusals live); it is asked to complete gaps inside text
+   that already exists.
+2. **Bidirectional consistency does the work.** In the authors' analysis,
+   "bidirectional modeling drives the model to produce contextually consistent
+   outputs for masked spans, even when harmful". The same infilling pressure
+   that makes a dLLM a great code editor presses it to complete a harmful
+   scaffold coherently.
+3. **Parallel commitment removes the checkpoint.** "Parallel decoding limits
+   model dynamic filtering and rejection sampling of unsafe content": by the
+   time any monitor could react, the span exists on the canvas.
+
+The reported numbers are not marginal: up to 100% keyword-based attack success
+on Dream-Instruct, and gains over the strongest prior jailbreak baseline of up
+to 78.5 percentage points in evaluator-based success on JailbreakBench.
+
+## Why AR-inherited alignment transfers poorly
+
+Nothing in the standard pipeline targets this surface. SFT refusals are
+learned as response-initial patterns, and an infilling query never asks for a
+response beginning. Preference optimization on a dLLM already fights estimator
+variance before any safety-specific difficulty enters (chapter 7). Streaming
+moderation has no purchase on a canvas where the harmful span materializes
+mid-sequence at step 3 of 32. In the atlas's terms: alignment techniques were
+fitted to one decoding policy, sequential and prefix-first, and are being
+deployed on machines whose policy axis moved.
+
+<Callout kind="keyidea">
+**Every dLLM capability has a safety dual.** Bidirectional infilling (the code
+feature) is scaffold-completion pressure (the attack). Parallel decoding (the
+latency feature) removes sequential refusal checkpoints (the defense that no
+longer works). Revision (the quality feature) is the one genuinely new
+defensive affordance: a canvas-level monitor can in principle re-mask a
+harmful span before finalization, an option AR streaming never had. Safety
+work that treats a dLLM as "an LLM with a different sampler" will keep being
+surprised.
+</Callout>
+
+## Defense directions, honestly labeled
+
+Published defenses are thin as of 2026, so directions rather than results:
+canvas-level moderation scored per denoising step rather than per streamed
+token; infilling-aware alignment that includes interleaved mask-text formats
+in safety tuning so refusal becomes a property of completions, not prefixes;
+and decode-time monitors reading the model's own confidence and
+unmasking-order dynamics, signals with no AR analogue. None is validated at
+scale in public work.
+
+<Callout kind="caveat">
+This chapter leans on a young literature: one flagship attack paper, its own
+metrics (keyword-based success flatters attacks; evaluator-based numbers run
+lower), and no published at-scale defenses to weigh against it. Commercial
+systems disclose little about their safety stacks, so the public picture may
+understate deployed defenses. What is robust is the structural analysis: the
+assumptions alignment inherited from AR decoding demonstrably do not all
+survive the move to parallel generation.
+</Callout>
+
+<RefList />

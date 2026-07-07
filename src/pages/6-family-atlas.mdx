@@ -1,0 +1,94 @@
+---
+layout: ../layouts/Base.astro
+title: The Family Atlas
+slug: 6-family-atlas
+description: Four design axes classify every dLLM ever shipped; families are clusters, adapted is a flag, and flow matching is the formalism spanning them.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+import FamilyAtlas from '../components/widgets/FamilyAtlas.svelte';
+
+# The Family Atlas
+
+Ask three engineering questions of "a dLLM": does it keep a KV cache? Can it
+generate longer than its training canvas? Is its reported likelihood exact or
+a bound? For LLaDA the answers are *no, no, bound*. For a Block Diffusion
+model: *yes, yes, tighter hybrid*. One label returning opposite answers is not
+doing its job, so replace the label with coordinates.
+
+## Four axes locate every model
+
+1. **State space**: where the corruption lives. Absorbing (`[M]`), uniform
+   (token to token), or continuous (embeddings / simplex).
+2. **Granularity**: full canvas, or blocks of size $B$ (chapter 5's dial).
+3. **Provenance**: from scratch, or adapted from a pretrained AR checkpoint.
+4. **Decoding policy**: random, confidence-based, semi-AR, or distilled
+   few-step (chapter 4; changeable after training).
+
+Deployment properties are *consequences*, not extra axes: cache, length cap,
+and likelihood tightness follow from granularity; self-correction from state
+space plus policy; training cost from provenance. The axes are orthogonal:
+Dream is masked by state and granularity but *adapted* by
+provenance<Ref k="ye2025dream" />, and SSD-LM is continuous by state but
+blockwise by granularity<Ref k="han2022ssdlm" />.
+
+<FamilyAtlas client:visible />
+
+## The families in one paragraph each
+
+**Masked dLLMs** are the mainstream: absorbing state, full canvas. LLaDA
+proved the objective is a complete substitute for next-token prediction at 8B
+scale with 2.3T tokens from scratch<Ref k="nie2025large" />; Dream matched it
+from a Qwen2.5 initialization at 0.6T<Ref k="ye2025dream" />; MMaDA extended
+it across modalities<Ref k="yang2025mmada" /> and LLaDA-MoE made it
+sparse<Ref k="zhu2025lladamoe" />.
+
+**Block dLLMs** trade capped parallelism for an exact cache and unbounded
+length, and are where the commercial systems live (chapter 5).
+
+**Adapted dLLMs** are a provenance flag, not a rival family. The
+DiffuGPT/DiffuLLaMA recipe converts 127M-7B AR checkpoints with less than 200B
+tokens using attention-mask annealing and a kept shift
+operation<Ref k="gong2024scaling" />, roughly an order of magnitude cheaper
+than from-scratch. The flag travels across families: TESS 2 adapted Mistral-7B
+into a *simplex-space* dLLM<Ref k="tae2025tess" />.
+
+**Uniform-state dLLMs** let any token become any other, so revision lives in
+the state space itself rather than in a remasking policy. Historically weakest
+on likelihood, the family was revived by the diffusion duality: uniform-state
+diffusion is the argmax projection of a Gaussian diffusion, which imports
+consistency distillation and few-step sampling roughly two orders of magnitude
+faster<Ref k="sahoo2025duo" />.
+
+**Continuous-state dLLMs** (embedding or simplex) retreated to the niche where
+they are irreplaceable: classifier *gradients* act natively only on a
+continuous carrier, so gradient-steered generation still runs through
+them<Ref k="li2022diffusionlm" /><Ref k="karimimahabadi2024tess" />.
+
+**Hybrids** attack the within-step independence directly: EDLM corrects each
+step with a sequence-level energy model<Ref k="xu2025energy" />, and Eso-LM
+fuses AR and masked phases with an exact KV cache while preserving parallel
+generation<Ref k="sahoo2026esoteric" />.
+
+<Callout kind="keyidea">
+**Families are coordinates, not tribes, and the frontier is already mixing
+them.** Seed Diffusion trains with mask corruption then edit corruption, a
+uniform-family idea inside a mask-trained block-decoded
+system<Ref k="song2025seed" />. Dream is masked with AR provenance. Fast-dLLM
+makes a full-canvas model serve like a block one<Ref k="wu2025fastdllm" />.
+Reading off the four coordinates of a new release remains the fastest way to
+know what it can and cannot do; that is exactly what the quiz above trains.
+</Callout>
+
+<Callout kind="caveat">
+The minority families are graded on a curve: their flagship results live at
+1-7B research scale while the masked and block families ship as products, so
+"revived" means scientifically active, not deployed. And one deliberate
+absence from the atlas: discrete flow matching is not a family but a
+*formalism* spanning them (chapter 3); the mask corner of its path family is
+precisely the masked column here.
+</Callout>
+
+<RefList />

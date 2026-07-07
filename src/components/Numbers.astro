@@ -1,0 +1,37 @@
+---
+// The cheat-sheet numbers grid, from numbers.json, linked to chapters + arXiv.
+import numbers from '../data/numbers.json';
+import refs from '../data/refs.json';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const R = refs as Record<string, { authors: string; arxiv?: string; url?: string }>;
+const items = (numbers as { value: string; label: string; ref: string | null; chapter: string }[]).map((n) => {
+  const r = n.ref ? R[n.ref] : null;
+  return {
+    ...n,
+    href: r ? (r.arxiv ? `https://arxiv.org/abs/${r.arxiv}` : r.url) : null,
+    authors: r?.authors ?? null,
+  };
+});
+---
+
+<div class="numbers wide">
+  {items.map((n) => (
+    <div class="num">
+      <div class="val">{n.value}</div>
+      <div class="lbl">{n.label}</div>
+      <div class="links">
+        <a href={`${base}/${n.chapter}/`}>chapter</a>
+        {n.href && <a href={n.href} target="_blank" rel="noopener">source</a>}
+      </div>
+    </div>
+  ))}
+</div>
+
+<style>
+  .numbers { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.7rem; margin: 1.4rem 0; }
+  .num { border: 1px solid var(--rule); border-radius: 8px; padding: 0.7rem 0.85rem; }
+  .val { font-family: var(--sans); font-weight: 800; font-size: 1.25rem; color: var(--amber); }
+  .lbl { font-size: 0.84rem; line-height: 1.45; margin: 0.25rem 0 0.4rem; }
+  .links { font-family: var(--sans); font-size: 0.75rem; display: flex; gap: 0.7rem; }
+</style>

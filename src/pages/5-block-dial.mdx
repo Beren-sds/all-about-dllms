@@ -1,0 +1,87 @@
+---
+layout: ../layouts/Base.astro
+title: The Block Dial
+slug: 5-block-dial
+description: Autoregression and masked diffusion are the endpoints of one slider, and Block Diffusion built the dial.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+import BlockDial from '../components/widgets/BlockDial.svelte';
+
+# The Block Dial
+
+Two requests break a pure masked dLLM outright. Ask it for a 10,000-token
+document: undefined, because the diffusion process only exists on the training
+canvas. Ask it to serve cheaply: every step recomputes bidirectional attention
+over all positions with no exact cache. Both failures share one cause, and the
+fix is a dial.
+
+## Autoregressive across blocks, diffusion within
+
+Partition the sequence into blocks of size $B$. Generate blocks left to right,
+each conditioned on all finished blocks; generate the tokens *within* each
+block by masked diffusion. The chain rule across blocks is exact, only the
+within-block terms are bounds:
+
+$$
+\log p_\theta(\mathbf{x}) = \sum_{b} \log p_\theta\!\left(\mathbf{x}^{(b)} \mid \mathbf{x}^{(<b)}\right)
+\;\ge\; \sum_{b} -\mathcal{L}_{\text{masked}}\!\left(\mathbf{x}^{(b)} \mid \mathbf{x}^{(<b)}\right),
+$$
+
+so the overall bound tightens monotonically as $B$ shrinks, reaching exact AR
+likelihood at $B=1$ and the full masked NELBO at $B=L$. Block
+Diffusion<Ref k="arriola2025block" /> made this a trained architecture with a
+block-causal attention mask, and the dial is not a metaphor, it is a measured
+curve:
+
+<BlockDial client:visible />
+
+Three things come back at small $B$ that pure diffusion gave up: an **exact KV
+cache** across blocks (finished blocks never change), **unbounded generation
+length** (keep appending blocks), and a **tighter likelihood**. What is spent
+is parallelism, now capped at $B$ tokens per step. SSD-LM had already decoded
+in blocks of 25 in 2022<Ref k="han2022ssdlm" />; BD3-LM supplied the
+architecture, the training recipe, and the numbers.
+
+## Three things "block diffusion" can mean
+
+The term is used for three distinct designs, and conflating them produces
+wrong conclusions about what a given system can do:
+
+1. **A trained architecture** (BD3-LM, SSD-LM): block structure in the
+   weights; the cache is exact, the likelihood genuinely tightens, length is
+   unbounded.
+2. **A decoding policy** on a full-canvas model (semi-autoregressive
+   unmasking for LLaDA): blocks order the commitments, but the model still
+   attends over the whole canvas. Quality changes; cache validity and the
+   length cap do not.
+3. **A serving approximation** (Fast-dLLM<Ref k="wu2025fastdllm" />): a
+   full-canvas model served *as if* block-causal, reusing stale activations
+   outside the active block, training-free, up to 27.6x throughput with small
+   measured accuracy deltas.
+
+<Callout kind="caveat">
+Deployed "diffusion speed" is usually a blend of all three, and commercial
+systems disclose unevenly. Mercury reports 1,109 and 737 tokens per second on
+H100 for its Coder models (independent Artificial Analysis
+evaluations)<Ref k="labs2025mercury" /> but describes decoding only as
+parallel and coarse-to-fine. Seed Diffusion reports 2,146 tokens per second on
+H20 and does state its mechanism: block-level parallel sampling with a causal
+order between blocks<Ref k="song2025seed" />. Gemini Diffusion's page reports
+1,479 tokens per second of sampling speed<Ref k="deepmind2025gemini" />. These
+numbers sit on different hardware and different benchmarks; they jointly
+support "block-structured serving is fast," not any finer ranking.
+</Callout>
+
+<Callout kind="keyidea">
+The paradigm war ends here quietly. The systems people can actually use at
+scale are neither pure AR nor pure diffusion but a point on this dial, chosen
+for serving economics: enough diffusion for within-block parallelism, enough
+autoregression for a cache and unbounded length. When you read a dLLM
+announcement, your first question should be: **where on the dial, and is it
+architecture, policy, or approximation?**
+</Callout>
+
+<RefList />
