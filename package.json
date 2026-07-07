@@ -17,5 +17,8 @@
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
     "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
   }
 }
