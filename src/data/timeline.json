@@ -1,0 +1,26 @@
+{
+  "tracks": [
+    { "id": "prehistory", "name": "Pre-diffusion parallel generation", "color": "#B23A5B" },
+    { "id": "continuous", "name": "Continuous diffusion and flow matching", "color": "#2B4C93" },
+    { "id": "discrete", "name": "Discrete / text diffusion", "color": "#0F7B6C" },
+    { "id": "dllm", "name": "Diffusion LLMs", "color": "#B5730B" }
+  ],
+  "events": [
+    { "year": 2015, "track": "continuous", "label": "Diffusion probabilistic models", "blurb": "Sohl-Dickstein et al. invert a gradual noising process; the founding idea.", "ref": "sohldickstein2015deep" },
+    { "year": 2018, "track": "prehistory", "label": "NAT", "blurb": "One-pass parallel translation; names the multimodality problem that still governs parallel decoding.", "ref": "gu2018nonautoregressive" },
+    { "year": 2018, "track": "prehistory", "label": "Iterative refinement", "blurb": "Lee et al. frame refinement as conditional denoising, the score connection avant la lettre.", "ref": "lee2018deterministic" },
+    { "year": 2019, "track": "prehistory", "label": "Mask-Predict", "blurb": "Masked LM training + re-mask-the-least-confident decoding: the modern dLLM decoder, six years early.", "ref": "ghazvininejad2019maskpredict" },
+    { "year": 2019, "track": "prehistory", "label": "XLNet / Levenshtein", "blurb": "Any-order objectives for pretraining; insertion and deletion as generation operations.", "ref": "yang2019xlnet" },
+    { "year": 2020, "track": "continuous", "label": "DDPM", "blurb": "The ELBO, noise prediction, and the simple loss that made diffusion practical.", "ref": "ho2020denoising" },
+    { "year": 2021, "track": "discrete", "label": "D3PM", "blurb": "Discrete state-space diffusion; uniform and absorbing kernels; the BERT connection.", "ref": "austin2021structured" },
+    { "year": 2022, "track": "continuous", "label": "Flow matching", "blurb": "Choose the path, regress the velocity; diffusion becomes a special case.", "ref": "lipman2023flow" },
+    { "year": 2022, "track": "discrete", "label": "Diffusion-LM / SSD-LM", "blurb": "Embedding- and simplex-space text diffusion; SSD-LM already decodes in blocks.", "ref": "li2022diffusionlm" },
+    { "year": 2023, "track": "discrete", "label": "SEDD", "blurb": "Score entropy brings discrete diffusion to GPT-2-level perplexity.", "ref": "lou2023discrete" },
+    { "year": 2024, "track": "discrete", "label": "MDLM / MD4", "blurb": "The masked objective simplified to weighted cross-entropy; time-independence proven.", "ref": "sahoo2024simple" },
+    { "year": 2024, "track": "discrete", "label": "Discrete flow matching", "blurb": "The same masked endpoint re-derived from CTMC velocities; scaled to 1.7B.", "ref": "gat2024discrete" },
+    { "year": 2025, "track": "dllm", "label": "LLaDA / Dream", "blurb": "Masked diffusion at 7-8B matches similarly sized AR models; from scratch and by adaptation.", "ref": "nie2025large" },
+    { "year": 2025, "track": "dllm", "label": "Mercury / Seed Diffusion / Gemini Diffusion", "blurb": "Commercial systems serve block-structured diffusion at 1,000+ tokens per second.", "ref": "labs2025mercury" },
+    { "year": 2025, "track": "dllm", "label": "Block Diffusion", "blurb": "BD3-LM makes the AR-diffusion interpolation a trained architecture with an exact block cache.", "ref": "arriola2025block" },
+    { "year": 2026, "track": "dllm", "label": "RL, safety, hybrids", "blurb": "diffu-GRPO reasoning, mask-infilling jailbreaks, Eso-LM caching: the post-training era begins.", "ref": "zhao2025d1" }
+  ]
+}

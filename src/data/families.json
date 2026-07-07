@@ -1,0 +1,122 @@
+{
+  "axes": [
+    { "id": "state", "name": "State space", "question": "Where does the corruption live?", "values": ["absorbing ([M])", "uniform (token to token)", "continuous (embedding / simplex)"] },
+    { "id": "granularity", "name": "Granularity", "question": "How much of the sequence does one diffusion process cover?", "values": ["full canvas", "blockwise (size B)"] },
+    { "id": "provenance", "name": "Provenance", "question": "Where do the weights start?", "values": ["from scratch", "adapted from an AR model"] },
+    { "id": "policy", "name": "Decoding policy", "question": "How are positions committed at inference?", "values": ["random order", "confidence-based", "semi-AR blocks", "distilled few-step"] }
+  ],
+  "families": [
+    {
+      "id": "masked",
+      "name": "Masked dLLM",
+      "color": "#0F7B6C",
+      "state": "absorbing ([M])",
+      "granularity": "full canvas",
+      "likelihood": "ELBO bound",
+      "cache": "none exact; approximate retrofits (Fast-dLLM, dKV-Cache)",
+      "length": "capped by the training canvas",
+      "selfCorrection": "remasking, a decoding policy",
+      "control": "clamp-and-infill",
+      "provenanceSeen": "scratch (LLaDA) and adapted (Dream)",
+      "exemplars": ["LLaDA 8B", "Dream 7B", "MMaDA", "LLaDA-MoE"],
+      "chooseWhen": "Research on bidirectional generation, infilling, any-order decoding; the open-weights mainstream.",
+      "refs": ["nie2025large", "ye2025dream", "yang2025mmada", "zhu2025lladamoe"]
+    },
+    {
+      "id": "block",
+      "name": "Block dLLM",
+      "color": "#2B4C93",
+      "state": "absorbing, within each block",
+      "granularity": "blockwise, size B; AR across blocks",
+      "likelihood": "exact across blocks, bound within; tightens as B shrinks",
+      "cache": "exact across blocks",
+      "length": "unbounded",
+      "selfCorrection": "within the active block",
+      "control": "clamp within block",
+      "provenanceSeen": "scratch (BD3-LM)",
+      "exemplars": ["SSD-LM", "BD3-LM", "Seed Diffusion"],
+      "chooseWhen": "Serving under latency or throughput targets; unbounded output length; the commercial operating point.",
+      "refs": ["han2022ssdlm", "arriola2025block", "song2025seed"]
+    },
+    {
+      "id": "uniform",
+      "name": "Uniform-state dLLM",
+      "color": "#6A4A8E",
+      "state": "uniform (any token can become any other)",
+      "granularity": "full canvas",
+      "likelihood": "ELBO, historically loosest",
+      "cache": "none",
+      "length": "capped by the training canvas",
+      "selfCorrection": "native, in the state space itself",
+      "control": "none special",
+      "provenanceSeen": "scratch",
+      "exemplars": ["D3PM-uniform", "SEDD", "Duo"],
+      "chooseWhen": "Few-step generation research: consistency distillation ports through the Gaussian dual.",
+      "refs": ["austin2021structured", "lou2023discrete", "sahoo2025duo"]
+    },
+    {
+      "id": "continuous",
+      "name": "Continuous-state dLLM",
+      "color": "#B5730B",
+      "state": "embedding or vocabulary simplex",
+      "granularity": "full canvas or blocks (SSD-LM)",
+      "likelihood": "ELBO, with a rounding leak",
+      "cache": "none",
+      "length": "capped by the training canvas",
+      "selfCorrection": "continuous refinement of all positions",
+      "control": "native gradient guidance, the family's superpower",
+      "provenanceSeen": "adapted (TESS 2 from Mistral-7B)",
+      "exemplars": ["Diffusion-LM", "Plaid 1B", "TESS", "TESS 2"],
+      "chooseWhen": "Steering generation with an arbitrary differentiable scorer.",
+      "refs": ["li2022diffusionlm", "gulrajani2023likelihood", "karimimahabadi2024tess", "tae2025tess"]
+    },
+    {
+      "id": "hybrid",
+      "name": "Hybrid",
+      "color": "#B23A5B",
+      "state": "varies; fixes the reverse step",
+      "granularity": "full canvas or interleaved phases",
+      "likelihood": "tighter by construction; Eso-LM interpolates to AR",
+      "cache": "Eso-LM: exact cache with parallel generation",
+      "length": "design-dependent",
+      "selfCorrection": "sequence-level energy correction (EDLM)",
+      "control": "none special",
+      "provenanceSeen": "AR-derived energy (EDLM)",
+      "exemplars": ["EDLM", "Eso-LM"],
+      "chooseWhen": "Closing the likelihood gap without giving up parallelism.",
+      "refs": ["xu2025energy", "sahoo2026esoteric"]
+    }
+  ],
+  "quiz": [
+    {
+      "model": "Dream 7B",
+      "answer": { "state": "absorbing ([M])", "granularity": "full canvas", "provenance": "adapted from an AR model" },
+      "explain": "Dream is a full-canvas masked dLLM initialized from Qwen2.5 7B weights and trained for 0.6T tokens: masked family by state and granularity, adapted by provenance.",
+      "ref": "ye2025dream"
+    },
+    {
+      "model": "SSD-LM",
+      "answer": { "state": "continuous (embedding / simplex)", "granularity": "blockwise (size B)", "provenance": "adapted from an AR model" },
+      "explain": "SSD-LM diffuses on the vocabulary simplex (continuous state), decodes semi-autoregressively in blocks of 25, and initializes from RoBERTa-large: proof that the state-space and granularity axes are independent.",
+      "ref": "han2022ssdlm"
+    },
+    {
+      "model": "BD3-LM trained with B = 1",
+      "answer": { "state": "absorbing ([M])", "granularity": "blockwise (size B)", "provenance": "from scratch" },
+      "explain": "Trick entry: with one token per block the within-block diffusion is vacuous, so this is an ordinary autoregressive language model wearing a diffusion name. Exact likelihood, full KV cache, one token per step.",
+      "ref": "arriola2025block"
+    },
+    {
+      "model": "TESS 2",
+      "answer": { "state": "continuous (embedding / simplex)", "granularity": "full canvas", "provenance": "adapted from an AR model" },
+      "explain": "TESS 2 is a simplex-space (continuous) generalist adapted from Mistral-7B by continued pretraining with the diffusion loss: evidence the adaptation flag travels across families.",
+      "ref": "tae2025tess"
+    },
+    {
+      "model": "Duo",
+      "answer": { "state": "uniform (token to token)", "granularity": "full canvas", "provenance": "from scratch" },
+      "explain": "Duo is uniform-state: tokens transition between real values, and the family's Gaussian dual imports consistency distillation for few-step sampling, roughly two orders of magnitude faster.",
+      "ref": "sahoo2025duo"
+    }
+  ]
+}

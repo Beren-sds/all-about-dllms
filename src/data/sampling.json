@@ -1,0 +1,72 @@
+{
+ "nfe": [
+  1,
+  2,
+  4,
+  8,
+  16,
+  32,
+  64,
+  128,
+  256
+ ],
+ "genppl_confidence": [
+  9330.38227115538,
+  825.4388655145104,
+  239.5155028907927,
+  104.44121948355608,
+  68.43059805209133,
+  49.01053357349679,
+  44.21765971766471,
+  38.80164041272785,
+  34.82759499819914
+ ],
+ "genppl_random": [
+  9330.38227115538,
+  1605.1146257025941,
+  582.913412261218,
+  347.22308849813896,
+  281.5691310296456,
+  246.42005973748806,
+  213.78425369686227,
+  223.1359270515853,
+  224.3457654487498
+ ],
+ "genppl_noisy": [
+  9330.38227115538,
+  914.064932751193,
+  256.3838362897853,
+  95.94957051179215,
+  58.295425440497596,
+  40.2831722138476,
+  33.692815736186255,
+  31.82720497438086,
+  28.76636765254198
+ ],
+ "seconds_noisy": [
+  0.07,
+  0.16,
+  0.29,
+  0.58,
+  1.17,
+  2.34,
+  4.65,
+  9.26,
+  18.58
+ ],
+ "seconds_ar": 10.83,
+ "genppl_ar_samples": 2.770479908623773,
+ "genppl_real_text": 5.499498132126452,
+ "text_nfe4": [
+  "e thil ea tohas in ao a er noer ome the  be  anganeto ofe  es I do of llches  thuthoe de to a ler  the  me the noe to me  hane yoe bpondo  the this thme o you ie me toy  youre, me woe oahe tef uy ofr to th ing mon iy by teo  'd I I  therd, mo aaen fehe to ",
+  "  te ae the I  are I hen a food gy a the  he I toa mor me ayad shou hot an kithesmu heree-toy evert to h ther ie ericro to  it tear and ar f gha he a  I watd se  tht a hilsio teu hereried God an  he: te heaf me: a; thndof   tthe vis I Edere I eardt aod den"
+ ],
+ "text_nfe32": [
+  "od eee to  thave te he cown do be th and andee to thatte ad the tor fof weat to thou your or  and I is to me to to the tor tome there thery themy be the lat  fo the thet the ther his is thento be th theres tche the tor for be iy fose ther the tor ther;\nThe",
+  "e tht cof yo youe you I nond is he foe be to and cod for oheye thou a Gou you yo  he there th yourr athe a tof yon my Gond a an ao yof thy me youse is your yod the the yo cand were be cond be the there the per me th ton my me you I come thet he thy be the "
+ ],
+ "text_nfe256": [
+  "e his to tor to me nof youre, withe han is ou he there for fo yould fore yof here to to your the hof withe the be con that an me the you th athe fon the for con the cof to me to ands be for one the be the har fome the this I withe the ther for fo there the",
+  "let for fome the prom we is fo they for here we hof the that and to is to for be then me yof sof othe th me he is my he be that the to the the the be my for hathen thave fore, the they ther ther ing for fore ithe the der, this tof core, and the ther hest t"
+ ]
+}

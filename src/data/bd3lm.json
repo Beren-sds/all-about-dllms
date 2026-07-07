@@ -1,0 +1,6 @@
+{
+  "source": "arriola2025block",
+  "note": "Test perplexities from Block Diffusion (Arriola et al., ICLR 2025), Tables 3-4. AR values are exact NLL perplexities; all diffusion values are ELBO upper bounds.",
+  "lm1b": { "ar": 22.83, "b4": 28.23, "b8": 29.83, "b16": 30.6, "mdlm": 31.78 },
+  "owt": { "ar": 17.54, "b4": 20.73, "b8": 21.68, "b16": 22.27, "mdlm": 22.98 }
+}
