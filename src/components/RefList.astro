@@ -1,0 +1,26 @@
+---
+// Per-page numbered reference list; renders whatever <Ref/> collected above it.
+import refs from '../data/refs.json';
+
+const store = (globalThis as any).__refstore ?? new Map();
+const order: string[] = store.get(Astro.url.pathname) ?? [];
+const R = refs as Record<string, { authors: string; title: string; venue: string; arxiv?: string; url?: string }>;
+const items = order.map((k) => {
+  const r = R[k];
+  return { ...r, href: r.arxiv ? `https://arxiv.org/abs/${r.arxiv}` : (r.url ?? '#'), linkText: r.arxiv ? `arXiv:${r.arxiv}` : 'link' };
+});
+---
+
+{items.length > 0 && (
+  <section>
+    <h2>References on this page</h2>
+    <ol class="reflist">
+      {items.map((r) => (
+        <li>
+          {r.authors}. <em>{r.title}</em>. {r.venue}.{' '}
+          <a href={r.href} target="_blank" rel="noopener">{r.linkText}</a>
+        </li>
+      ))}
+    </ol>
+  </section>
+)}

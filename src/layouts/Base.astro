@@ -4,12 +4,17 @@ import 'katex/dist/katex.min.css';
 import { chapters, prevNext } from '../data/chapters';
 
 interface Props {
-  title: string;
+  title?: string;
   description?: string;
   slug?: string; // chapter slug for prev/next; omit on the hub
+  frontmatter?: { title?: string; description?: string; slug?: string };
 }
 
-const { title, description = 'An interactive tutorial on diffusion language models.', slug } = Astro.props;
+const fm = Astro.props.frontmatter ?? {};
+const title = Astro.props.title ?? fm.title ?? 'All You Need to Know About dLLMs';
+const description =
+  Astro.props.description ?? fm.description ?? 'An interactive tutorial on diffusion language models.';
+const slug = Astro.props.slug ?? fm.slug;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const nav = slug ? prevNext(slug) : null;
 ---

@@ -1,0 +1,28 @@
+---
+// Numbered citation with hover tooltip. Numbering is per page in order of
+// first use, tracked via Astro.locals-like module state reset per page render.
+import refs from '../data/refs.json';
+
+interface Props { k: string }
+const { k } = Astro.props;
+
+const store = (globalThis as any).__refstore ?? ((globalThis as any).__refstore = new Map());
+// key store per rendering page
+const pageKey = Astro.url.pathname;
+if (!store.has(pageKey)) store.set(pageKey, []);
+const order: string[] = store.get(pageKey);
+if (!order.includes(k)) order.push(k);
+const n = order.indexOf(k) + 1;
+
+const r = (refs as Record<string, any>)[k];
+if (!r) throw new Error(`Unknown ref key: ${k}`);
+const href = r.arxiv ? `https://arxiv.org/abs/${r.arxiv}` : r.url;
+---
+
+<span class="ref-call"
+  ><a href={href} target="_blank" rel="noopener">[{n}]</a><span class="tip"
+    >{r.authors}. <em>{r.title}</em>. {r.venue}.
+    {r.arxiv && <a href={href} target="_blank" rel="noopener">arXiv:{r.arxiv}</a>}
+    {!r.arxiv && r.url && <a href={href} target="_blank" rel="noopener">link</a>}
+  </span></span
+>

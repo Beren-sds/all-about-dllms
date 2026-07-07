@@ -1,0 +1,99 @@
+---
+layout: ../layouts/Base.astro
+title: Two Ways to Write a Sentence
+slug: 1-two-ways
+description: Autoregression and diffusion differ in exactly two choices, the corruption process and the decoding order. Everything else follows.
+---
+
+import Callout from '../components/Callout.astro';
+import Ref from '../components/Ref.astro';
+import RefList from '../components/RefList.astro';
+import DecodingPlayground from '../components/widgets/DecodingPlayground.svelte';
+
+# Two Ways to Write a Sentence
+
+Every probabilistic model of text answers one structural question before it
+answers any other: *in what order, and conditioned on what context, are tokens
+decided?* For a decade the field gave a single answer, left to right, each
+token conditioned on the tokens already written. That answer is
+**autoregression** (AR), and it underwrites GPT, Llama, and essentially every
+deployed language model.
+
+This site is about the other answer. **Diffusion language models** (dLLMs)
+generate a sequence by starting from a fully corrupted draft, a row of mask
+placeholders, and iteratively denoising it into clean text, revising many
+positions in parallel and in no fixed order. Below is a real one doing exactly
+that. It is a small model trained for this tutorial, and every frame is an
+actual decode, not an animation:
+
+<DecodingPlayground client:visible autoplay={true} compact={true} />
+
+<Callout kind="keyidea">
+The organizing idea of everything that follows: **generative sequence
+modelling is repeatedly predicting clean tokens from a corrupted context.**
+Autoregression and diffusion are two points in one design space. They differ
+only in (i) the **corruption process** that defines what "a partially observed
+sequence" means, and (ii) the **decoding order** in which positions are
+committed. AR corrupts by truncation (everything after position $i$ is hidden)
+and decodes strictly left to right. Diffusion corrupts by masking (a random
+subset of positions is hidden) and decodes in any order, many positions per
+step.
+</Callout>
+
+## Why look past autoregression at all?
+
+Autoregression is not broken. But the left-to-right factorization
+
+$$
+p(\mathbf{x}) = \prod_{i=1}^{L} p\left(x_i \mid x_{<i}\right)
+$$
+
+carries four structural commitments, and each is a place where an alternative
+paradigm can buy something:
+
+1. **Sequential decoding.** Producing $L$ tokens costs $L$ sequential forward
+   passes. Latency is lower-bounded by sequence length no matter how much
+   hardware parallelism is available.
+2. **Unidirectional context.** Token $i$ sees only $x_{<i}$. Infilling,
+   editing, and constraint satisfaction ("end the sentence with *frost*") are
+   structurally awkward.
+3. **Exposure bias.** Trained on ground-truth prefixes, the model consumes its
+   own samples at inference; errors compound along a single committed path.
+4. **A fixed generation order.** Left to right is one ordering of a joint
+   distribution, and not obviously the best one for code, math, or structured
+   documents.
+
+<Callout kind="intuition">
+Think of AR as writing with a pen that cannot be lifted: each word is final
+the instant it is written. Diffusion is writing in pencil on the whole line at
+once: sketch every position roughly, sharpen the positions you are most
+confident about, erase and redo the rest. Pencil-and-revise can use the whole
+page as context and fill it in any order, but each sharpening pass costs a
+full read of the page.
+</Callout>
+
+## The scoreboard, as of July 2026
+
+Diffusion is not a free lunch. It pays in likelihood (a dLLM reports a bound,
+not an exact number), in sampling compute (each denoising step is a full
+forward pass), and in engineering maturity (the KV cache that makes AR
+inference cheap does not transfer cleanly). What it buys: parallel decoding,
+bidirectional context, native infilling, and revisable generation. At the
+7&ndash;8B scale, pure masked-diffusion models such as LLaDA<Ref k="nie2025large" />
+and Dream<Ref k="ye2025dream" /> are reported competitive with similarly sized
+AR models, and commercial systems<Ref k="labs2025mercury" /><Ref k="song2025seed" />
+serve diffusion-style decoding at over 1,000 tokens per second.
+
+<Callout kind="caveat">
+The honest framing, which this site maintains throughout, is a trade-off
+surface rather than a winner. The scaling claims above are recent and mostly
+single-source; the mathematics is stable, the empirical frontier is not. Where
+a number matters, we cite its exact source, and where it is a bound rather
+than a measurement, we say so.
+</Callout>
+
+Ready for the machinery? The next chapter builds the masked-diffusion
+objective, and it is simpler than you expect: the entire thing collapses to
+weighted fill-in-the-blanks.
+
+<RefList />
